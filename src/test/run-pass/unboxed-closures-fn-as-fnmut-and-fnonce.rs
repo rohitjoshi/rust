@@ -11,28 +11,37 @@
 // Checks that the Fn trait hierarchy rules permit
 // any Fn trait to be used where Fn is implemented.
 
-#![feature(unboxed_closures)]
-#![feature(unboxed_closures)]
+
+#![feature(unboxed_closures, core)]
 
 use std::ops::{Fn,FnMut,FnOnce};
 
 struct S;
 
-impl Fn<(int,),int> for S {
-    extern "rust-call" fn call(&self, (x,): (int,)) -> int {
+impl Fn<(i32,)> for S {
+    extern "rust-call" fn call(&self, (x,): (i32,)) -> i32 {
         x * x
     }
 }
 
-fn call_it<F:Fn(int)->int>(f: &F, x: int) -> int {
+impl FnMut<(i32,)> for S {
+    extern "rust-call" fn call_mut(&mut self, args: (i32,)) -> i32 { self.call(args) }
+}
+
+impl FnOnce<(i32,)> for S {
+    type Output = i32;
+    extern "rust-call" fn call_once(self, args: (i32,)) -> i32 { self.call(args) }
+}
+
+fn call_it<F:Fn(i32)->i32>(f: &F, x: i32) -> i32 {
     f(x)
 }
 
-fn call_it_mut<F:FnMut(int)->int>(f: &mut F, x: int) -> int {
+fn call_it_mut<F:FnMut(i32)->i32>(f: &mut F, x: i32) -> i32 {
     f(x)
 }
 
-fn call_it_once<F:FnOnce(int)->int>(f: F, x: int) -> int {
+fn call_it_once<F:FnOnce(i32)->i32>(f: F, x: i32) -> i32 {
     f(x)
 }
 
@@ -43,4 +52,3 @@ fn main() {
     assert_eq!(x, y);
     assert_eq!(y, z);
 }
-

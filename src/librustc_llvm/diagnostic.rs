@@ -18,7 +18,7 @@ use std::ptr;
 
 use {ValueRef, TwineRef, DebugLocRef, DiagnosticInfoRef};
 
-#[derive(Copy)]
+#[derive(Copy, Clone)]
 pub enum OptimizationDiagnosticKind {
     OptimizationRemark,
     OptimizationMissed,
@@ -37,6 +37,8 @@ impl OptimizationDiagnosticKind {
     }
 }
 
+#[allow(raw_pointer_derive)]
+#[derive(Copy, Clone)]
 pub struct OptimizationDiagnostic {
     pub kind: OptimizationDiagnosticKind,
     pub pass_name: *const c_char,
@@ -44,8 +46,6 @@ pub struct OptimizationDiagnostic {
     pub debug_loc: DebugLocRef,
     pub message: TwineRef,
 }
-
-impl Copy for OptimizationDiagnostic {}
 
 impl OptimizationDiagnostic {
     unsafe fn unpack(kind: OptimizationDiagnosticKind, di: DiagnosticInfoRef)
@@ -69,13 +69,12 @@ impl OptimizationDiagnostic {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct InlineAsmDiagnostic {
     pub cookie: c_uint,
     pub message: TwineRef,
     pub instruction: ValueRef,
 }
-
-impl Copy for InlineAsmDiagnostic {}
 
 impl InlineAsmDiagnostic {
     unsafe fn unpack(di: DiagnosticInfoRef)
@@ -96,7 +95,7 @@ impl InlineAsmDiagnostic {
     }
 }
 
-#[derive(Copy)]
+#[derive(Copy, Clone)]
 pub enum Diagnostic {
     Optimization(OptimizationDiagnostic),
     InlineAsm(InlineAsmDiagnostic),

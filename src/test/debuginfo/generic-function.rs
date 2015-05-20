@@ -8,7 +8,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// ignore-android: FIXME(#10381)
 // min-lldb-version: 310
 
 // compile-flags:-g
@@ -22,7 +21,7 @@
 // gdb-command:print *t1
 // gdb-check:$2 = 2.5
 // gdb-command:print ret
-// gdb-check:$3 = {{1, 2.5}, {2.5, 1}}
+// gdb-check:$3 = {__0 = {__0 = 1, __1 = 2.5}, __1 = {__0 = 2.5, __1 = 1}}
 // gdb-command:continue
 
 // gdb-command:print *t0
@@ -30,7 +29,7 @@
 // gdb-command:print *t1
 // gdb-check:$5 = 4
 // gdb-command:print ret
-// gdb-check:$6 = {{3.5, 4}, {4, 3.5}}
+// gdb-check:$6 = {__0 = {__0 = 3.5, __1 = 4}, __1 = {__0 = 4, __1 = 3.5}}
 // gdb-command:continue
 
 // gdb-command:print *t0
@@ -38,7 +37,7 @@
 // gdb-command:print *t1
 // gdb-check:$8 = {a = 6, b = 7.5}
 // gdb-command:print ret
-// gdb-check:$9 = {{5, {a = 6, b = 7.5}}, {{a = 6, b = 7.5}, 5}}
+// gdb-check:$9 = {__0 = {__0 = 5, __1 = {a = 6, b = 7.5}}, __1 = {__0 = {a = 6, b = 7.5}, __1 = 5}}
 // gdb-command:continue
 
 
@@ -74,7 +73,7 @@
 
 #[derive(Clone)]
 struct Struct {
-    a: int,
+    a: isize,
     b: f64
 }
 
@@ -86,9 +85,9 @@ fn dup_tup<T0: Clone, T1: Clone>(t0: &T0, t1: &T1) -> ((T0, T1), (T1, T0)) {
 
 fn main() {
 
-    let _ = dup_tup(&1i, &2.5f64);
+    let _ = dup_tup(&1, &2.5f64);
     let _ = dup_tup(&3.5f64, &4_u16);
-    let _ = dup_tup(&5i, &Struct { a: 6, b: 7.5 });
+    let _ = dup_tup(&5, &Struct { a: 6, b: 7.5 });
 }
 
 fn zzz() {()}

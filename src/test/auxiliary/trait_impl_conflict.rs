@@ -11,5 +11,5 @@
 pub trait Foo {
 }
 
-impl Foo for int {
+impl Foo for isize {
 }

@@ -11,7 +11,7 @@
 // force-host
 
 #![feature(plugin_registrar)]
-#![feature(box_syntax)]
+#![feature(box_syntax, rustc_private)]
 
 extern crate syntax;
 extern crate rustc;
@@ -20,14 +20,14 @@ use std::borrow::ToOwned;
 use syntax::ast;
 use syntax::codemap::Span;
 use syntax::ext::build::AstBuilder;
-use syntax::ext::base::{TTMacroExpander, ExtCtxt, MacResult, MacExpr, NormalTT};
+use syntax::ext::base::{TTMacroExpander, ExtCtxt, MacResult, MacEager, NormalTT};
 use syntax::parse::token;
 use syntax::print::pprust;
 use syntax::ptr::P;
 use rustc::plugin::Registry;
 
 struct Expander {
-    args: P<ast::MetaItem>,
+    args: Vec<P<ast::MetaItem>>,
 }
 
 impl TTMacroExpander for Expander {
@@ -35,11 +35,10 @@ impl TTMacroExpander for Expander {
                    ecx: &'cx mut ExtCtxt,
                    sp: Span,
                    _: &[ast::TokenTree]) -> Box<MacResult+'cx> {
-
-        let attr = ecx.attribute(sp, self.args.clone());
-        let src = pprust::attribute_to_string(&attr);
-        let interned = token::intern_and_get_ident(src.as_slice());
-        MacExpr::new(ecx.expr_str(sp, interned))
+        let args = self.args.iter().map(|i| pprust::meta_item_to_string(&*i))
+            .collect::<Vec<_>>().connect(", ");
+        let interned = token::intern_and_get_ident(&args[..]);
+        MacEager::expr(ecx.expr_str(sp, interned))
     }
 }
 
@@ -47,5 +46,6 @@ impl TTMacroExpander for Expander {
 pub fn plugin_registrar(reg: &mut Registry) {
     let args = reg.args().clone();
     reg.register_syntax_extension(token::intern("plugin_args"),
-        NormalTT(box Expander { args: args, }, None));
+        // FIXME (#22405): Replace `Box::new` with `box` here when/if possible.
+        NormalTT(Box::new(Expander { args: args, }), None, false));
 }

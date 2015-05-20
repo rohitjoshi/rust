@@ -18,4 +18,3 @@ trait Trait {
 impl Trait for isize {}  //~ ERROR missing: `Type`
 
 fn main() {}
-

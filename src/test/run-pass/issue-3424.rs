@@ -1,4 +1,3 @@
-
 // Copyright 2012-2014 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
@@ -11,24 +10,17 @@
 
 // rustc --test ignores2.rs && ./ignores2
 
-#![allow(unknown_features)]
-#![feature(box_syntax)]
-#![feature(unboxed_closures)]
+pub struct Path;
 
-use std::path::{Path};
-use std::path;
-use std::result;
-use std::thunk::Thunk;
-
-type rsrc_loader = Box<FnMut(&Path) -> (result::Result<String, String>) + 'static>;
+type rsrc_loader = Box<FnMut(&Path) -> Result<String, String>>;
 
 fn tester()
 {
-    let mut loader: rsrc_loader = box move|_path| {
-        result::Result::Ok("more blah".to_string())
-    };
+    let mut loader: rsrc_loader = Box::new(move |_path| {
+        Ok("more blah".to_string())
+    });
 
-    let path = path::Path::new("blah");
+    let path = Path;
     assert!(loader(&path).is_ok());
 }
 

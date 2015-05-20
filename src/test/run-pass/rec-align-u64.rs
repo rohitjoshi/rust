@@ -16,8 +16,8 @@ use std::mem;
 
 mod rusti {
     extern "rust-intrinsic" {
-        pub fn pref_align_of<T>() -> uint;
-        pub fn min_align_of<T>() -> uint;
+        pub fn pref_align_of<T>() -> usize;
+        pub fn min_align_of<T>() -> usize;
     }
 }
 
@@ -39,18 +39,28 @@ struct Outer {
 #[cfg(any(target_os = "linux",
           target_os = "macos",
           target_os = "freebsd",
-          target_os = "dragonfly"))]
+          target_os = "dragonfly",
+          target_os = "openbsd"))]
 mod m {
     #[cfg(target_arch = "x86")]
     pub mod m {
-        pub fn align() -> uint { 4u }
-        pub fn size() -> uint { 12u }
+        pub fn align() -> usize { 4 }
+        pub fn size() -> usize { 12 }
     }
 
     #[cfg(any(target_arch = "x86_64", target_arch = "arm", target_arch = "aarch64"))]
     pub mod m {
-        pub fn align() -> uint { 8u }
-        pub fn size() -> uint { 16u }
+        pub fn align() -> usize { 8 }
+        pub fn size() -> usize { 16 }
+    }
+}
+
+#[cfg(target_os = "bitrig")]
+mod m {
+    #[cfg(target_arch = "x86_64")]
+    pub mod m {
+        pub fn align() -> usize { 8 }
+        pub fn size() -> usize { 16 }
     }
 }
 
@@ -58,29 +68,29 @@ mod m {
 mod m {
     #[cfg(target_arch = "x86")]
     pub mod m {
-        pub fn align() -> uint { 8u }
-        pub fn size() -> uint { 16u }
+        pub fn align() -> usize { 8 }
+        pub fn size() -> usize { 16 }
     }
 
     #[cfg(target_arch = "x86_64")]
     pub mod m {
-        pub fn align() -> uint { 8u }
-        pub fn size() -> uint { 16u }
+        pub fn align() -> usize { 8 }
+        pub fn size() -> usize { 16 }
     }
 }
 
 #[cfg(target_os = "android")]
 mod m {
-    #[cfg(target_arch = "arm")]
+    #[cfg(any(target_arch = "arm", target_arch = "aarch64"))]
     pub mod m {
-        pub fn align() -> uint { 8u }
-        pub fn size() -> uint { 16u }
+        pub fn align() -> usize { 8 }
+        pub fn size() -> usize { 16 }
     }
 }
 
 pub fn main() {
     unsafe {
-        let x = Outer {c8: 22u8, t: Inner {c64: 44u64}};
+        let x = Outer {c8: 22, t: Inner {c64: 44}};
 
         let y = format!("{:?}", x);
 

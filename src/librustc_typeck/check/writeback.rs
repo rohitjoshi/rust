@@ -26,6 +26,7 @@ use util::ppaux::Repr;
 use std::cell::Cell;
 
 use syntax::ast;
+use syntax::ast_util;
 use syntax::codemap::{DUMMY_SP, Span};
 use syntax::print::pprust::pat_to_string;
 use syntax::visit;
@@ -49,7 +50,7 @@ pub fn resolve_type_vars_in_fn(fcx: &FnCtxt,
     assert_eq!(fcx.writeback_errors.get(), false);
     let mut wbcx = WritebackCx::new(fcx);
     wbcx.visit_block(blk);
-    for arg in decl.inputs.iter() {
+    for arg in &decl.inputs {
         wbcx.visit_node_id(ResolvingPattern(arg.pat.span), arg.id);
         wbcx.visit_pat(&*arg.pat);
 
@@ -84,6 +85,32 @@ impl<'cx, 'tcx> WritebackCx<'cx, 'tcx> {
     fn tcx(&self) -> &'cx ty::ctxt<'tcx> {
         self.fcx.tcx()
     }
+
+    // Hacky hack: During type-checking, we treat *all* operators
+    // as potentially overloaded. But then, during writeback, if
+    // we observe that something like `a+b` is (known to be)
+    // operating on scalars, we clear the overload.
+    fn fix_scalar_binary_expr(&mut self, e: &ast::Expr) {
+        if let ast::ExprBinary(ref op, ref lhs, ref rhs) = e.node {
+            let lhs_ty = self.fcx.node_ty(lhs.id);
+            let lhs_ty = self.fcx.infcx().resolve_type_vars_if_possible(&lhs_ty);
+
+            let rhs_ty = self.fcx.node_ty(rhs.id);
+            let rhs_ty = self.fcx.infcx().resolve_type_vars_if_possible(&rhs_ty);
+
+            if ty::type_is_scalar(lhs_ty) && ty::type_is_scalar(rhs_ty) {
+                self.fcx.inh.method_map.borrow_mut().remove(&MethodCall::expr(e.id));
+
+                // weird but true: the by-ref binops put an
+                // adjustment on the lhs but not the rhs; the
+                // adjustment for rhs is kind of baked into the
+                // system.
+                if !ast_util::is_by_value_binop(op.node) {
+                    self.fcx.inh.adjustments.borrow_mut().remove(&lhs.id);
+                }
+            }
+        }
+    }
 }
 
 ///////////////////////////////////////////////////////////////////////////
@@ -113,18 +140,16 @@ impl<'cx, 'tcx, 'v> Visitor<'v> for WritebackCx<'cx, 'tcx> {
             return;
         }
 
+        self.fix_scalar_binary_expr(e);
+
         self.visit_node_id(ResolvingExpr(e.span), e.id);
         self.visit_method_map_entry(ResolvingExpr(e.span),
                                     MethodCall::expr(e.id));
 
-        match e.node {
-            ast::ExprClosure(_, _, ref decl, _) => {
-                for input in decl.inputs.iter() {
-                    let _ = self.visit_node_id(ResolvingExpr(e.span),
-                                               input.id);
-                }
+        if let ast::ExprClosure(_, ref decl, _) = e.node {
+            for input in &decl.inputs {
+                self.visit_node_id(ResolvingExpr(e.span), input.id);
             }
-            _ => {}
         }
 
         visit::walk_expr(self, e);
@@ -169,7 +194,7 @@ impl<'cx, 'tcx, 'v> Visitor<'v> for WritebackCx<'cx, 'tcx> {
         match t.node {
             ast::TyFixedLengthVec(ref ty, ref count_expr) => {
                 self.visit_ty(&**ty);
-                write_ty_to_tcx(self.tcx(), count_expr.id, self.tcx().types.uint);
+                write_ty_to_tcx(self.tcx(), count_expr.id, self.tcx().types.usize);
             }
             _ => visit::walk_ty(self, t)
         }
@@ -182,16 +207,20 @@ impl<'cx, 'tcx> WritebackCx<'cx, 'tcx> {
             return;
         }
 
-        for (upvar_id, upvar_borrow) in self.fcx.inh.upvar_borrow_map.borrow().iter() {
-            let r = upvar_borrow.region;
-            let r = self.resolve(&r, ResolvingUpvar(*upvar_id));
-            let new_upvar_borrow = ty::UpvarBorrow { kind: upvar_borrow.kind,
-                                                     region: r };
-            debug!("Upvar borrow for {} resolved to {}",
+        for (upvar_id, upvar_capture) in &*self.fcx.inh.upvar_capture_map.borrow() {
+            let new_upvar_capture = match *upvar_capture {
+                ty::UpvarCapture::ByValue => ty::UpvarCapture::ByValue,
+                ty::UpvarCapture::ByRef(ref upvar_borrow) => {
+                    let r = upvar_borrow.region;
+                    let r = self.resolve(&r, ResolvingUpvar(*upvar_id));
+                    ty::UpvarCapture::ByRef(
+                        ty::UpvarBorrow { kind: upvar_borrow.kind, region: r })
+                }
+            };
+            debug!("Upvar capture for {} resolved to {}",
                    upvar_id.repr(self.tcx()),
-                   new_upvar_borrow.repr(self.tcx()));
-            self.fcx.tcx().upvar_borrow_map.borrow_mut().insert(
-                *upvar_id, new_upvar_borrow);
+                   new_upvar_capture.repr(self.tcx()));
+            self.fcx.tcx().upvar_capture_map.borrow_mut().insert(*upvar_id, new_upvar_capture);
         }
     }
 
@@ -200,14 +229,13 @@ impl<'cx, 'tcx> WritebackCx<'cx, 'tcx> {
             return
         }
 
-        for (def_id, closure) in self.fcx.inh.closures.borrow().iter() {
-            let closure_ty = self.resolve(&closure.closure_type,
-                                          ResolvingClosure(*def_id));
-            let closure = ty::Closure {
-                closure_type: closure_ty,
-                kind: closure.kind,
-            };
-            self.fcx.tcx().closures.borrow_mut().insert(*def_id, closure);
+        for (def_id, closure_ty) in &*self.fcx.inh.closure_tys.borrow() {
+            let closure_ty = self.resolve(closure_ty, ResolvingClosure(*def_id));
+            self.fcx.tcx().closure_tys.borrow_mut().insert(*def_id, closure_ty);
+        }
+
+        for (def_id, &closure_kind) in &*self.fcx.inh.closure_kinds.borrow() {
+            self.fcx.tcx().closure_kinds.borrow_mut().insert(*def_id, closure_kind);
         }
     }
 
@@ -256,26 +284,23 @@ impl<'cx, 'tcx> WritebackCx<'cx, 'tcx> {
             }
 
             Some(adjustment) => {
-                let adj_object = ty::adjust_is_object(&adjustment);
                 let resolved_adjustment = match adjustment {
-                    ty::AdjustReifyFnPointer(def_id) => {
-                        ty::AdjustReifyFnPointer(def_id)
+                    ty::AdjustReifyFnPointer => ty::AdjustReifyFnPointer,
+
+                    ty::AdjustUnsafeFnPointer => {
+                        ty::AdjustUnsafeFnPointer
                     }
 
                     ty::AdjustDerefRef(adj) => {
-                        for autoderef in range(0, adj.autoderefs) {
-                            let method_call = MethodCall::autoderef(id, autoderef);
-                            self.visit_method_map_entry(reason, method_call);
-                        }
-
-                        if adj_object {
-                            let method_call = MethodCall::autoobject(id);
+                        for autoderef in 0..adj.autoderefs {
+                            let method_call = MethodCall::autoderef(id, autoderef as u32);
                             self.visit_method_map_entry(reason, method_call);
                         }
 
                         ty::AdjustDerefRef(ty::AutoDerefRef {
                             autoderefs: adj.autoderefs,
                             autoref: self.resolve(&adj.autoref, reason),
+                            unsize: self.resolve(&adj.unsize, reason),
                         })
                     }
                 };
@@ -317,7 +342,7 @@ impl<'cx, 'tcx> WritebackCx<'cx, 'tcx> {
 ///////////////////////////////////////////////////////////////////////////
 // Resolution reason.
 
-#[derive(Copy)]
+#[derive(Copy, Clone)]
 enum ResolveReason {
     ResolvingExpr(Span),
     ResolvingLocal(Span),
@@ -402,7 +427,7 @@ impl<'cx, 'tcx> Resolver<'cx, 'tcx> {
                     let span = self.reason.span(self.tcx);
                     span_err!(self.tcx.sess, span, E0104,
                         "cannot resolve lifetime for captured variable `{}`: {}",
-                        ty::local_var_name_str(self.tcx, upvar_id.var_id).get().to_string(),
+                        ty::local_var_name_str(self.tcx, upvar_id.var_id).to_string(),
                         infer::fixup_err_to_string(e));
                 }
 

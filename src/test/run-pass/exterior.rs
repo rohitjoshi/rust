@@ -9,11 +9,11 @@
 // except according to those terms.
 
 
+
 use std::cell::Cell;
 
-struct Point {x: int, y: int, z: int}
-
-impl Copy for Point {}
+#[derive(Copy, Clone)]
+struct Point {x: isize, y: isize, z: isize}
 
 fn f(p: &Cell<Point>) {
     assert!((p.get().z == 12));

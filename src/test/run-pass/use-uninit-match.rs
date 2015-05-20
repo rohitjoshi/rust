@@ -10,8 +10,8 @@
 
 
 
-fn foo<T>(o: myoption<T>) -> int {
-    let mut x: int = 5;
+fn foo<T>(o: myoption<T>) -> isize {
+    let mut x: isize = 5;
     match o {
         myoption::none::<T> => { }
         myoption::some::<T>(_t) => { x += 1; }
@@ -21,4 +21,4 @@ fn foo<T>(o: myoption<T>) -> int {
 
 enum myoption<T> { none, some(T), }
 
-pub fn main() { println!("{}", 5i); }
+pub fn main() { println!("{}", 5); }

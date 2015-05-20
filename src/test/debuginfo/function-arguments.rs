@@ -8,7 +8,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// ignore-android: FIXME(#10381)
 // min-lldb-version: 310
 
 // compile-flags:-g
@@ -59,7 +58,7 @@ fn main() {
     }
 }
 
-fn fun(x: int, y: bool) -> (int, bool) {
+fn fun(x: isize, y: bool) -> (isize, bool) {
     zzz(); // #break
 
     (x, y)

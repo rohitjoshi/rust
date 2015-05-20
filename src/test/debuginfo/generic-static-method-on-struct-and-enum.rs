@@ -8,7 +8,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// ignore-android: FIXME(#10381)
 // min-lldb-version: 310
 
 // compile-flags:-g
@@ -35,34 +34,34 @@
 #![omit_gdb_pretty_printer_section]
 
 struct Struct {
-    x: int
+    x: isize
 }
 
 impl Struct {
 
-    fn static_method<T1, T2>(arg1: T1, arg2: T2) -> int {
+    fn static_method<T1, T2>(arg1: T1, arg2: T2) -> isize {
         zzz(); // #break
         return 0;
     }
 }
 
 enum Enum {
-    Variant1 { x: int },
+    Variant1 { x: isize },
     Variant2,
-    Variant3(f64, int, char),
+    Variant3(f64, isize, char),
 }
 
 impl Enum {
 
-    fn static_method<T1, T2, T3>(arg1: T1, arg2: T2, arg3: T3) -> int {
+    fn static_method<T1, T2, T3>(arg1: T1, arg2: T2, arg3: T3) -> isize {
         zzz(); // #break
         return 1;
     }
 }
 
 fn main() {
-    Struct::static_method(1i, 2i);
-    Enum::static_method(-3i, 4.5f64, 5i);
+    Struct::static_method(1, 2);
+    Enum::static_method(-3, 4.5f64, 5);
 }
 
 fn zzz() {()}

@@ -17,11 +17,12 @@ use middle::subst;
 use middle::subst::{Subst, Substs};
 use middle::traits;
 use middle::ty_fold::{TypeFolder, TypeFoldable};
-use trans::base::{set_llvm_fn_attrs, set_inline_hint};
+use trans::attributes;
 use trans::base::{trans_enum_variant, push_ctxt, get_item_val};
-use trans::base::{trans_fn, decl_internal_rust_fn};
+use trans::base::trans_fn;
 use trans::base;
 use trans::common::*;
+use trans::declare;
 use trans::foreign;
 use middle::ty::{self, HasProjectionTypes, Ty};
 use util::ppaux::Repr;
@@ -29,14 +30,14 @@ use util::ppaux::Repr;
 use syntax::abi;
 use syntax::ast;
 use syntax::ast_map;
-use syntax::ast_util::{local_def, PostExpansionMethod};
+use syntax::ast_util::local_def;
 use syntax::attr;
 use syntax::codemap::DUMMY_SP;
 use std::hash::{Hasher, Hash, SipHasher};
 
 pub fn monomorphic_fn<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
                                 fn_id: ast::DefId,
-                                psubsts: &subst::Substs<'tcx>,
+                                psubsts: &'tcx subst::Substs<'tcx>,
                                 ref_id: Option<ast::NodeId>)
     -> (ValueRef, Ty<'tcx>, bool) {
     debug!("monomorphic_fn(\
@@ -55,7 +56,7 @@ pub fn monomorphic_fn<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
 
     let hash_id = MonoId {
         def: fn_id,
-        params: psubsts.types.clone()
+        params: &psubsts.types
     };
 
     let item_ty = ty::lookup_item_type(ccx.tcx(), fn_id).ty;
@@ -131,7 +132,7 @@ pub fn monomorphic_fn<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
 
         hash = format!("h{}", state.finish());
         ccx.tcx().map.with_path(fn_id.node, |path| {
-            exported_name(path, &hash[])
+            exported_name(path, &hash[..])
         })
     };
 
@@ -139,19 +140,22 @@ pub fn monomorphic_fn<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
 
     // This shouldn't need to option dance.
     let mut hash_id = Some(hash_id);
-    let mut mk_lldecl = |&mut : abi: abi::Abi| {
+    let mut mk_lldecl = |abi: abi::Abi| {
         let lldecl = if abi != abi::Rust {
-            foreign::decl_rust_fn_with_foreign_abi(ccx, mono_ty, &s[])
+            foreign::decl_rust_fn_with_foreign_abi(ccx, mono_ty, &s[..])
         } else {
-            decl_internal_rust_fn(ccx, mono_ty, &s[])
+            // FIXME(nagisa): perhaps needs a more fine grained selection? See setup_lldecl below.
+            declare::define_internal_rust_fn(ccx, &s[..], mono_ty).unwrap_or_else(||{
+                ccx.sess().bug(&format!("symbol `{}` already defined", s));
+            })
         };
 
         ccx.monomorphized().borrow_mut().insert(hash_id.take().unwrap(), lldecl);
         lldecl
     };
-    let setup_lldecl = |&: lldecl, attrs: &[ast::Attribute]| {
+    let setup_lldecl = |lldecl, attrs: &[ast::Attribute]| {
         base::update_linkage(ccx, lldecl, None, base::OriginalTranslation);
-        set_llvm_fn_attrs(ccx, attrs, lldecl);
+        attributes::from_fn_attrs(ccx, attrs, lldecl);
 
         let is_first = !ccx.available_monomorphizations().borrow().contains(&s);
         if is_first {
@@ -177,12 +181,12 @@ pub fn monomorphic_fn<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
                   ..
               } => {
                   let d = mk_lldecl(abi);
-                  let needs_body = setup_lldecl(d, &i.attrs[]);
+                  let needs_body = setup_lldecl(d, &i.attrs);
                   if needs_body {
                       if abi != abi::Rust {
                           foreign::trans_rust_fn_with_foreign_abi(
                               ccx, &**decl, &**body, &[], d, psubsts, fn_id.node,
-                              Some(&hash[]));
+                              Some(&hash[..]));
                       } else {
                           trans_fn(ccx, &**decl, &**body, d, psubsts, fn_id.node, &[]);
                       }
@@ -200,13 +204,13 @@ pub fn monomorphic_fn<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
             let tvs = ty::enum_variants(ccx.tcx(), local_def(parent));
             let this_tv = tvs.iter().find(|tv| { tv.id.node == fn_id.node}).unwrap();
             let d = mk_lldecl(abi::Rust);
-            set_inline_hint(d);
+            attributes::inline(d, attributes::InlineAttr::Hint);
             match v.node.kind {
                 ast::TupleVariantKind(ref args) => {
                     trans_enum_variant(ccx,
                                        parent,
                                        &*v,
-                                       &args[],
+                                       &args[..],
                                        this_tv.disr_val,
                                        psubsts,
                                        d);
@@ -216,49 +220,50 @@ pub fn monomorphic_fn<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
             }
             d
         }
-        ast_map::NodeImplItem(ii) => {
-            match *ii {
-                ast::MethodImplItem(ref mth) => {
+        ast_map::NodeImplItem(impl_item) => {
+            match impl_item.node {
+                ast::MethodImplItem(ref sig, ref body) => {
                     let d = mk_lldecl(abi::Rust);
-                    let needs_body = setup_lldecl(d, &mth.attrs[]);
+                    let needs_body = setup_lldecl(d, &impl_item.attrs);
                     if needs_body {
                         trans_fn(ccx,
-                                 mth.pe_fn_decl(),
-                                 mth.pe_body(),
+                                 &sig.decl,
+                                 body,
                                  d,
                                  psubsts,
-                                 mth.id,
+                                 impl_item.id,
                                  &[]);
-                    }
-                    d
-                }
-                ast::TypeImplItem(_) => {
-                    ccx.sess().bug("can't monomorphize an associated type")
-                }
-            }
-        }
-        ast_map::NodeTraitItem(method) => {
-            match *method {
-                ast::ProvidedMethod(ref mth) => {
-                    let d = mk_lldecl(abi::Rust);
-                    let needs_body = setup_lldecl(d, &mth.attrs[]);
-                    if needs_body {
-                        trans_fn(ccx, mth.pe_fn_decl(), mth.pe_body(), d,
-                                 psubsts, mth.id, &[]);
                     }
                     d
                 }
                 _ => {
                     ccx.sess().bug(&format!("can't monomorphize a {:?}",
-                                           map_node)[])
+                                           map_node))
+                }
+            }
+        }
+        ast_map::NodeTraitItem(trait_item) => {
+            match trait_item.node {
+                ast::MethodTraitItem(ref sig, Some(ref body)) => {
+                    let d = mk_lldecl(abi::Rust);
+                    let needs_body = setup_lldecl(d, &trait_item.attrs);
+                    if needs_body {
+                        trans_fn(ccx, &sig.decl, body, d,
+                                 psubsts, trait_item.id, &[]);
+                    }
+                    d
+                }
+                _ => {
+                    ccx.sess().bug(&format!("can't monomorphize a {:?}",
+                                           map_node))
                 }
             }
         }
         ast_map::NodeStructCtor(struct_def) => {
             let d = mk_lldecl(abi::Rust);
-            set_inline_hint(d);
+            attributes::inline(d, attributes::InlineAttr::Hint);
             base::trans_tuple_struct(ccx,
-                                     &struct_def.fields[],
+                                     &struct_def.fields,
                                      struct_def.ctor_id.expect("ast-mapped tuple struct \
                                                                 didn't have a ctor id"),
                                      psubsts,
@@ -276,7 +281,7 @@ pub fn monomorphic_fn<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
         ast_map::NodePat(..) |
         ast_map::NodeLocal(..) => {
             ccx.sess().bug(&format!("can't monomorphize a {:?}",
-                                   map_node)[])
+                                   map_node))
         }
     };
 
@@ -286,10 +291,10 @@ pub fn monomorphic_fn<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
     (lldecl, mono_ty, true)
 }
 
-#[derive(PartialEq, Eq, Hash, Show)]
+#[derive(PartialEq, Eq, Hash, Debug)]
 pub struct MonoId<'tcx> {
     pub def: ast::DefId,
-    pub params: subst::VecPerParamSpace<Ty<'tcx>>
+    pub params: &'tcx subst::VecPerParamSpace<Ty<'tcx>>
 }
 
 /// Monomorphizes a type from the AST by first applying the in-scope
@@ -333,10 +338,10 @@ pub fn normalize_associated_type<'tcx,T>(tcx: &ty::ctxt<'tcx>, value: &T) -> T
            obligations.repr(tcx));
 
     let mut fulfill_cx = traits::FulfillmentContext::new();
-    for obligation in obligations.into_iter() {
+    for obligation in obligations {
         fulfill_cx.register_predicate_obligation(&infcx, obligation);
     }
-    let result = drain_fulfillment_cx(DUMMY_SP, &infcx, &mut fulfill_cx, &result);
+    let result = drain_fulfillment_cx_or_panic(DUMMY_SP, &infcx, &mut fulfill_cx, &result);
 
     result
 }

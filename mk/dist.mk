@@ -52,7 +52,9 @@ PKG_FILES := \
       doc                                      \
       driver                                   \
       etc                                      \
+      error-index-generator                    \
       $(foreach crate,$(CRATES),lib$(crate))   \
+      libcollectionstest                       \
       libcoretest                              \
       libbacktrace                             \
       rt                                       \
@@ -109,8 +111,6 @@ distcheck-tar-src: dist-tar-src
 # Unix binary installer tarballs
 ######################################################################
 
-NON_INSTALLED_PREFIXES=COPYRIGHT,LICENSE-APACHE,LICENSE-MIT,README.md,version
-
 define DEF_INSTALLER
 
 $$(eval $$(call DEF_PREPARE,dir-$(1)))
@@ -124,35 +124,40 @@ dist-install-dir-$(1): PREPARE_LIB_CMD=$(DEFAULT_PREPARE_LIB_CMD)
 dist-install-dir-$(1): PREPARE_MAN_CMD=$(DEFAULT_PREPARE_MAN_CMD)
 dist-install-dir-$(1): PREPARE_CLEAN=true
 dist-install-dir-$(1): prepare-base-dir-$(1) docs compiler-docs
-	$$(Q)$$(PREPARE_MAN_CMD) $$(S)COPYRIGHT $$(PREPARE_DEST_DIR)
-	$$(Q)$$(PREPARE_MAN_CMD) $$(S)LICENSE-APACHE $$(PREPARE_DEST_DIR)
-	$$(Q)$$(PREPARE_MAN_CMD) $$(S)LICENSE-MIT $$(PREPARE_DEST_DIR)
-	$$(Q)$$(PREPARE_MAN_CMD) $$(S)README.md $$(PREPARE_DEST_DIR)
 	$$(Q)mkdir -p $$(PREPARE_DEST_DIR)/share/doc/rust
 	$$(Q)$$(PREPARE_MAN_CMD) $$(S)COPYRIGHT $$(PREPARE_DEST_DIR)/share/doc/rust
 	$$(Q)$$(PREPARE_MAN_CMD) $$(S)LICENSE-APACHE $$(PREPARE_DEST_DIR)/share/doc/rust
 	$$(Q)$$(PREPARE_MAN_CMD) $$(S)LICENSE-MIT $$(PREPARE_DEST_DIR)/share/doc/rust
 	$$(Q)$$(PREPARE_MAN_CMD) $$(S)README.md $$(PREPARE_DEST_DIR)/share/doc/rust
-# This tiny morsel of metadata is used by rust-packaging
-	$$(Q)echo "$(CFG_VERSION)" > $$(PREPARE_DEST_DIR)/version
 
-dist/$$(PKG_NAME)-$(1).tar.gz: dist-install-dir-$(1)
+prepare-overlay-$(1):
+	$$(Q)rm -Rf tmp/dist/$$(PKG_NAME)-$(1)-overlay
+	$$(Q)mkdir -p tmp/dist/$$(PKG_NAME)-$(1)-overlay
+	$$(Q)cp $$(S)COPYRIGHT tmp/dist/$$(PKG_NAME)-$(1)-overlay/
+	$$(Q)cp $$(S)LICENSE-APACHE tmp/dist/$$(PKG_NAME)-$(1)-overlay/
+	$$(Q)cp $$(S)LICENSE-MIT tmp/dist/$$(PKG_NAME)-$(1)-overlay/
+	$$(Q)cp $$(S)README.md tmp/dist/$$(PKG_NAME)-$(1)-overlay/
+# This tiny morsel of metadata is used by rust-packaging
+	$$(Q)echo "$(CFG_VERSION)" > tmp/dist/$$(PKG_NAME)-$(1)-overlay/version
+
+dist/$$(PKG_NAME)-$(1).tar.gz: dist-install-dir-$(1) prepare-overlay-$(1)
 	@$(call E, build: $$@)
 # Copy essential gcc components into installer
 ifdef CFG_WINDOWSY_$(1)
+ifeq ($$(findstring gnu,$(1)),gnu)
 	$$(Q)rm -Rf tmp/dist/win-rust-gcc-$(1)
 	$$(Q)$$(CFG_PYTHON) $$(S)src/etc/make-win-dist.py tmp/dist/$$(PKG_NAME)-$(1)-image tmp/dist/win-rust-gcc-$(1) $(1)
 	$$(Q)cp -r $$(S)src/etc/third-party tmp/dist/$$(PKG_NAME)-$(1)-image/share/doc/
 endif
+endif
 	$$(Q)$$(S)src/rust-installer/gen-installer.sh \
 		--product-name=Rust \
-		--verify-bin=rustc \
 		--rel-manifest-dir=rustlib \
 		--success-message=Rust-is-ready-to-roll. \
 		--image-dir=tmp/dist/$$(PKG_NAME)-$(1)-image \
 		--work-dir=tmp/dist \
 		--output-dir=dist \
-		--non-installed-prefixes=$$(NON_INSTALLED_PREFIXES) \
+		--non-installed-overlay=tmp/dist/$$(PKG_NAME)-$(1)-overlay \
 		--package-name=$$(PKG_NAME)-$(1) \
 		--component-name=rustc \
 		--legacy-manifest-dirs=rustlib,cargo
@@ -210,7 +215,14 @@ endif
 dist-install-dirs: $(foreach host,$(CFG_HOST),dist-install-dir-$(host))
 
 ifdef CFG_WINDOWSY_$(CFG_BUILD)
-MAYBE_MINGW_TARBALLS=$(foreach host,$(CFG_HOST),dist/$(MINGW_PKG_NAME)-$(host).tar.gz)
+define BUILD_MINGW_TARBALL
+ifeq ($$(findstring gnu,$(1)),gnu)
+MAYBE_MINGW_TARBALLS += dist/$(MINGW_PKG_NAME)-$(1).tar.gz
+endif
+endef
+
+$(foreach host,$(CFG_HOST),\
+  $(eval $(call BUILD_MINGW_TARBALL,$(host))))
 endif
 
 ifeq ($(CFG_DISABLE_DOCS),)

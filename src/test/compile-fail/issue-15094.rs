@@ -16,9 +16,10 @@ struct Debuger<T> {
     x: T
 }
 
-impl<T: fmt::Debug> ops::Fn<(), ()> for Debuger<T> {
-    fn call(&self, _args: ()) {
-//~^ ERROR `call` has an incompatible type for trait: expected "rust-call" fn, found "Rust" fn
+impl<T: fmt::Debug> ops::FnOnce<(),> for Debuger<T> {
+    type Output = ();
+    fn call_once(self, _args: ()) {
+//~^ ERROR `call_once` has an incompatible type for trait: expected "rust-call" fn, found "Rust" fn
         println!("{:?}", self.x);
     }
 }
@@ -28,6 +29,6 @@ fn make_shower<T>(x: T) -> Debuger<T> {
 }
 
 pub fn main() {
-    let show3 = make_shower(3is);
+    let show3 = make_shower(3);
     show3();
 }

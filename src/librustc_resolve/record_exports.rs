@@ -22,6 +22,7 @@ use {Module, NameBindings, Resolver};
 use Namespace::{self, TypeNS, ValueNS};
 
 use build_reduced_graph;
+use module_to_string;
 
 use rustc::middle::def::Export;
 use syntax::ast;
@@ -60,19 +61,19 @@ impl<'a, 'b, 'tcx> ExportRecorder<'a, 'b, 'tcx> {
                 // OK. Continue.
                 debug!("(recording exports for module subtree) recording \
                         exports for local module `{}`",
-                       self.module_to_string(&*module_));
+                       module_to_string(&*module_));
             }
             None => {
                 // Record exports for the root module.
                 debug!("(recording exports for module subtree) recording \
                         exports for root module `{}`",
-                       self.module_to_string(&*module_));
+                       module_to_string(&*module_));
             }
             Some(_) => {
                 // Bail out.
                 debug!("(recording exports for module subtree) not recording \
                         exports for `{}`",
-                       self.module_to_string(&*module_));
+                       module_to_string(&*module_));
                 return;
             }
         }
@@ -80,7 +81,7 @@ impl<'a, 'b, 'tcx> ExportRecorder<'a, 'b, 'tcx> {
         self.record_exports_for_module(&*module_);
         build_reduced_graph::populate_module_if_necessary(self.resolver, &module_);
 
-        for (_, child_name_bindings) in module_.children.borrow().iter() {
+        for (_, child_name_bindings) in &*module_.children.borrow() {
             match child_name_bindings.get_module_if_available() {
                 None => {
                     // Nothing to do.
@@ -91,7 +92,7 @@ impl<'a, 'b, 'tcx> ExportRecorder<'a, 'b, 'tcx> {
             }
         }
 
-        for (_, child_module) in module_.anonymous_children.borrow().iter() {
+        for (_, child_module) in &*module_.anonymous_children.borrow() {
             self.record_exports_for_module_subtree(child_module.clone());
         }
     }
@@ -133,13 +134,13 @@ impl<'a, 'b, 'tcx> ExportRecorder<'a, 'b, 'tcx> {
     fn add_exports_for_module(&mut self,
                               exports: &mut Vec<Export>,
                               module_: &Module) {
-        for (name, importresolution) in module_.import_resolutions.borrow().iter() {
-            if !importresolution.is_public {
+        for (name, import_resolution) in &*module_.import_resolutions.borrow() {
+            if !import_resolution.is_public {
                 continue
             }
             let xs = [TypeNS, ValueNS];
-            for &ns in xs.iter() {
-                match importresolution.target_for_namespace(ns) {
+            for &ns in &xs {
+                match import_resolution.target_for_namespace(ns) {
                     Some(target) => {
                         debug!("(computing exports) maybe export '{}'",
                                token::get_name(*name));

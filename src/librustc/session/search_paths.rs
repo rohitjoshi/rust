@@ -9,22 +9,25 @@
 // except according to those terms.
 
 use std::slice;
+use std::path::{Path, PathBuf};
+use session::early_error;
 
-#[derive(Clone, Show)]
+#[derive(Clone, Debug)]
 pub struct SearchPaths {
-    paths: Vec<(PathKind, Path)>,
+    paths: Vec<(PathKind, PathBuf)>,
 }
 
 pub struct Iter<'a> {
     kind: PathKind,
-    iter: slice::Iter<'a, (PathKind, Path)>,
+    iter: slice::Iter<'a, (PathKind, PathBuf)>,
 }
 
-#[derive(Eq, PartialEq, Clone, Copy, Show)]
+#[derive(Eq, PartialEq, Clone, Copy, Debug)]
 pub enum PathKind {
     Native,
     Crate,
     Dependency,
+    Framework,
     ExternFlag,
     All,
 }
@@ -41,12 +44,17 @@ impl SearchPaths {
             (PathKind::Crate, &path["crate=".len()..])
         } else if path.starts_with("dependency=") {
             (PathKind::Dependency, &path["dependency=".len()..])
+        } else if path.starts_with("framework=") {
+            (PathKind::Framework, &path["framework=".len()..])
         } else if path.starts_with("all=") {
             (PathKind::All, &path["all=".len()..])
         } else {
             (PathKind::All, path)
         };
-        self.paths.push((kind, Path::new(path)));
+        if path.is_empty() {
+            early_error("empty search path given via `-L`");
+        }
+        self.paths.push((kind, PathBuf::from(path)));
     }
 
     pub fn iter(&self, kind: PathKind) -> Iter {

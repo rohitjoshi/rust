@@ -17,9 +17,16 @@ struct S {
     y: isize,
 }
 
-impl FnMut<(isize,),isize> for S {
+impl FnMut<(isize,)> for S {
     extern "rust-call" fn call_mut(&mut self, (z,): (isize,)) -> isize {
         self.x * self.y * z
+    }
+}
+
+impl FnOnce<(isize,)> for S {
+    type Output = isize;
+    extern "rust-call" fn call_once(mut self, (z,): (isize,)) -> isize {
+        self.call_mut((z,))
     }
 }
 

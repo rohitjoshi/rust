@@ -9,7 +9,6 @@
 // except according to those terms.
 
 // ignore-tidy-linelength
-// ignore-android: FIXME(#10381)
 // min-lldb-version: 310
 
 // compile-flags:-g
@@ -54,7 +53,7 @@ enum Univariant<T> {
 
 fn main() {
 
-    // In order to avoid endianess trouble all of the following test values consist of a single
+    // In order to avoid endianness trouble all of the following test values consist of a single
     // repeated byte. This way each interpretation of the union should look the same, no matter if
     // this is a big or little endian machine.
 
@@ -76,7 +75,7 @@ fn main() {
     // 0b01011001 = 89
     let case3: Regular<u16, i32, u64>  = Case3 { a: 0, b: 6438275382588823897 };
 
-    let univariant = TheOnlyCase { a: -1i };
+    let univariant = TheOnlyCase { a: -1 };
 
     zzz(); // #break
 }

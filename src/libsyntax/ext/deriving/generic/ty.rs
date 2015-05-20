@@ -24,7 +24,7 @@ use parse::token::special_idents;
 use ptr::P;
 
 /// The types of pointers
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum PtrTy<'a> {
     /// &'lifetime mut
     Borrowed(Option<&'a str>, ast::Mutability),
@@ -34,7 +34,7 @@ pub enum PtrTy<'a> {
 
 /// A path, e.g. `::std::option::Option::<i32>` (global). Has support
 /// for type parameters and a lifetime.
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct Path<'a> {
     pub path: Vec<&'a str> ,
     pub lifetime: Option<&'a str>,
@@ -85,9 +85,9 @@ impl<'a> Path<'a> {
 }
 
 /// A type. Supports pointers, Self, and literals
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub enum Ty<'a> {
-    Self,
+    Self_,
     /// &/Box/ Ty
     Ptr(Box<Ty<'a>>, PtrTy<'a>),
     /// mod::mod::Type<[lifetime], [Params...]>, including a plain type
@@ -109,7 +109,7 @@ pub fn borrowed_explicit_self<'r>() -> Option<Option<PtrTy<'r>>> {
 }
 
 pub fn borrowed_self<'r>() -> Ty<'r> {
-    borrowed(box Self)
+    borrowed(Box::new(Self_))
 }
 
 pub fn nil_ty<'r>() -> Ty<'r> {
@@ -149,7 +149,7 @@ impl<'a> Ty<'a> {
                 }
             }
             Literal(ref p) => { p.to_ty(cx, span, self_ty, self_generics) }
-            Self  => {
+            Self_  => {
                 cx.ty_path(self.to_path(cx, span, self_ty, self_generics))
             }
             Tuple(ref fields) => {
@@ -168,7 +168,7 @@ impl<'a> Ty<'a> {
                    self_generics: &Generics)
                    -> ast::Path {
         match *self {
-            Self => {
+            Self_ => {
                 let self_params = self_generics.ty_params.map(|ty_param| {
                     cx.ty_ident(span, ty_param.ident)
                 });
@@ -247,7 +247,7 @@ impl<'a> LifetimeBounds<'a> {
                     mk_ty_param(cx,
                                 span,
                                 *name,
-                                bounds.as_slice(),
+                                bounds,
                                 self_ty,
                                 self_generics)
                 }

@@ -9,7 +9,6 @@
 // except according to those terms.
 
 // ignore-tidy-linelength
-// ignore-android: FIXME(#10381)
 // min-lldb-version: 310
 
 // compile-flags:-g
@@ -19,13 +18,13 @@
 // gdb-command:run
 
 // gdb-command:print some
-// gdb-check:$1 = {RUST$ENCODED$ENUM$0$None = {0x12345678}}
+// gdb-check:$1 = {RUST$ENCODED$ENUM$0$None = {__0 = 0x12345678}}
 
 // gdb-command:print none
-// gdb-check:$2 = {RUST$ENCODED$ENUM$0$None = {0x0}}
+// gdb-check:$2 = {RUST$ENCODED$ENUM$0$None = {__0 = 0x0}}
 
 // gdb-command:print full
-// gdb-check:$3 = {RUST$ENCODED$ENUM$1$Empty = {454545, 0x87654321, 9988}}
+// gdb-check:$3 = {RUST$ENCODED$ENUM$1$Empty = {__0 = 454545, __1 = 0x87654321, __2 = 9988}}
 
 // gdb-command:print empty_gdb->discr
 // gdb-check:$4 = (isize *) 0x0
@@ -37,10 +36,10 @@
 // gdb-check:$6 = (isize *) 0x0
 
 // gdb-command:print nested_non_zero_yep
-// gdb-check:$7 = {RUST$ENCODED$ENUM$1$2$Nope = {10.5, {a = 10, b = 20, c = [...]}}}
+// gdb-check:$7 = {RUST$ENCODED$ENUM$1$2$Nope = {__0 = 10.5, __1 = {a = 10, b = 20, c = [...]}}}
 
 // gdb-command:print nested_non_zero_nope
-// gdb-check:$8 = {RUST$ENCODED$ENUM$1$2$Nope = {[...], {a = [...], b = [...], c = 0x0}}}
+// gdb-check:$8 = {RUST$ENCODED$ENUM$1$2$Nope = {__0 = [...], __1 = {a = [...], b = [...], c = 0x0}}}
 
 // gdb-command:continue
 
@@ -130,10 +129,10 @@ fn main() {
     let some_str: Option<&'static str> = Some("abc");
     let none_str: Option<&'static str> = None;
 
-    let some: Option<&u32> = Some(unsafe { std::mem::transmute(0x12345678u) });
+    let some: Option<&u32> = Some(unsafe { std::mem::transmute(0x12345678_usize) });
     let none: Option<&u32> = None;
 
-    let full = MoreFields::Full(454545, unsafe { std::mem::transmute(0x87654321u) }, 9988);
+    let full = MoreFields::Full(454545, unsafe { std::mem::transmute(0x87654321_usize) }, 9988);
 
     let empty = MoreFields::Empty;
     let empty_gdb: &MoreFieldsRepr = unsafe { std::mem::transmute(&MoreFields::Empty) };
@@ -141,7 +140,7 @@ fn main() {
     let droid = NamedFields::Droid {
         id: 675675,
         range: 10000001,
-        internals: unsafe { std::mem::transmute(0x43218765u) }
+        internals: unsafe { std::mem::transmute(0x43218765_usize) }
     };
 
     let void_droid = NamedFields::Void;

@@ -8,7 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// ignore-fast doesn't like extern crate
+
+
+#![feature(libc, std_misc)]
 
 extern crate libc;
 
@@ -23,13 +25,13 @@ mod mlibc {
     }
 }
 
-fn atol(s: String) -> int {
-    let c = CString::from_slice(s.as_bytes());
-    unsafe { mlibc::atol(c.as_ptr()) as int }
+fn atol(s: String) -> isize {
+    let c = CString::new(s).unwrap();
+    unsafe { mlibc::atol(c.as_ptr()) as isize }
 }
 
 fn atoll(s: String) -> i64 {
-    let c = CString::from_slice(s.as_bytes());
+    let c = CString::new(s).unwrap();
     unsafe { mlibc::atoll(c.as_ptr()) as i64 }
 }
 

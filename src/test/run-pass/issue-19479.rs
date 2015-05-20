@@ -8,12 +8,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-trait Base {}
+// pretty-expanded FIXME #23616
+
+trait Base {
+    fn dummy(&self) { }
+}
 trait AssocA {
     type X: Base;
+    fn dummy(&self) { }
 }
 trait AssocB {
     type Y: Base;
+    fn dummy(&self) { }
 }
 impl<T: AssocA> AssocB for T {
     type Y = <T as AssocA>::X;

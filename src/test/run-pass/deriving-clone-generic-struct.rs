@@ -8,6 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// pretty-expanded FIXME #23616
+
 #[derive(Clone)]
 struct S<T> {
     foo: (),
@@ -16,5 +18,5 @@ struct S<T> {
 }
 
 pub fn main() {
-    let _ = S { foo: (), bar: (), baz: 1i }.clone();
+    let _ = S { foo: (), bar: (), baz: 1 }.clone();
 }

@@ -8,9 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[derive(PartialEq, Show)]
+#[derive(PartialEq, Debug)]
 enum Foo {
-    Bar(int, int),
+    Bar(isize, isize),
     Baz(f64, f64)
 }
 

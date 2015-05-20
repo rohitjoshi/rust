@@ -10,41 +10,43 @@
 
 // Microbenchmark for the smallintmap library
 
+#![feature(collections, duration, duration_span)]
+
 use std::collections::VecMap;
-use std::os;
+use std::env;
 use std::time::Duration;
 
-fn append_sequential(min: uint, max: uint, map: &mut VecMap<uint>) {
-    for i in range(min, max) {
-        map.insert(i, i + 22u);
+fn append_sequential(min: usize, max: usize, map: &mut VecMap<usize>) {
+    for i in min..max {
+        map.insert(i, i + 22);
     }
 }
 
-fn check_sequential(min: uint, max: uint, map: &VecMap<uint>) {
-    for i in range(min, max) {
-        assert_eq!(map[i], i + 22u);
+fn check_sequential(min: usize, max: usize, map: &VecMap<usize>) {
+    for i in min..max {
+        assert_eq!(map[i], i + 22);
     }
 }
 
 fn main() {
-    let args = os::args();
-    let args = if os::getenv("RUST_BENCH").is_some() {
+    let args = env::args();
+    let args = if env::var_os("RUST_BENCH").is_some() {
         vec!("".to_string(), "100000".to_string(), "100".to_string())
-    } else if args.len() <= 1u {
+    } else if args.len() <= 1 {
         vec!("".to_string(), "10000".to_string(), "50".to_string())
     } else {
-        args.into_iter().collect()
+        args.collect()
     };
-    let max = args[1].parse::<uint>().unwrap();
-    let rep = args[2].parse::<uint>().unwrap();
+    let max = args[1].parse::<usize>().unwrap();
+    let rep = args[2].parse::<usize>().unwrap();
 
-    let mut checkf = Duration::seconds(0);
-    let mut appendf = Duration::seconds(0);
+    let mut checkf = Duration::new(0, 0);
+    let mut appendf = Duration::new(0, 0);
 
-    for _ in range(0u, rep) {
+    for _ in 0..rep {
         let mut map = VecMap::new();
-        let d1 = Duration::span(|| append_sequential(0u, max, &mut map));
-        let d2 = Duration::span(|| check_sequential(0u, max, &map));
+        let d1 = Duration::span(|| append_sequential(0, max, &mut map));
+        let d2 = Duration::span(|| check_sequential(0, max, &map));
 
         checkf = checkf + d2;
         appendf = appendf + d1;
@@ -53,7 +55,7 @@ fn main() {
     let maxf = max as f64;
 
     println!("insert(): {} seconds\n", checkf);
-    println!("        : {} op/ms\n", maxf / checkf.num_milliseconds() as f64);
+    println!("        : {} op/s\n", maxf / checkf.secs() as f64);
     println!("get()   : {} seconds\n", appendf);
-    println!("        : {} op/ms\n", maxf / appendf.num_milliseconds() as f64);
+    println!("        : {} op/s\n", maxf / appendf.secs() as f64);
 }

@@ -8,7 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// pretty-expanded FIXME #23616
+
 fn main() {
     let mut buf = Vec::new();
-    |&mut: c: u8| buf.push(c);
+    |c: u8| buf.push(c);
 }

@@ -8,10 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// pretty-expanded FIXME #23616
+
 trait Person {
     type string;
+    fn dummy(&self) { }
 }
 
-struct Someone<P: Person>;
+struct Someone<P: Person>(std::marker::PhantomData<P>);
 
 fn main() {}

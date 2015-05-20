@@ -19,54 +19,62 @@
 //! explicitly, by convention implementing the `Clone` trait and calling
 //! the `clone` method.
 
-#![stable]
+#![stable(feature = "rust1", since = "1.0.0")]
 
 use marker::Sized;
 
 /// A common trait for cloning an object.
-#[stable]
+#[stable(feature = "rust1", since = "1.0.0")]
 pub trait Clone : Sized {
     /// Returns a copy of the value.
-    #[stable]
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let hello = "Hello"; // &str implements Clone
+    ///
+    /// assert_eq!("Hello", hello.clone());
+    /// ```
+    #[stable(feature = "rust1", since = "1.0.0")]
     fn clone(&self) -> Self;
 
-    /// Perform copy-assignment from `source`.
+    /// Performs copy-assignment from `source`.
     ///
     /// `a.clone_from(&b)` is equivalent to `a = b.clone()` in functionality,
     /// but can be overridden to reuse the resources of `a` to avoid unnecessary
     /// allocations.
     #[inline(always)]
-    #[unstable = "this function is rarely used"]
+    #[stable(feature = "rust1", since = "1.0.0")]
     fn clone_from(&mut self, source: &Self) {
         *self = source.clone()
     }
 }
 
-#[stable]
+#[stable(feature = "rust1", since = "1.0.0")]
 impl<'a, T: ?Sized> Clone for &'a T {
-    /// Return a shallow copy of the reference.
+    /// Returns a shallow copy of the reference.
     #[inline]
     fn clone(&self) -> &'a T { *self }
 }
 
 macro_rules! clone_impl {
     ($t:ty) => {
-        #[stable]
+        #[stable(feature = "rust1", since = "1.0.0")]
         impl Clone for $t {
-            /// Return a deep copy of the value.
+            /// Returns a deep copy of the value.
             #[inline]
             fn clone(&self) -> $t { *self }
         }
     }
 }
 
-clone_impl! { int }
+clone_impl! { isize }
 clone_impl! { i8 }
 clone_impl! { i16 }
 clone_impl! { i32 }
 clone_impl! { i64 }
 
-clone_impl! { uint }
+clone_impl! { usize }
 clone_impl! { u8 }
 clone_impl! { u16 }
 clone_impl! { u32 }
@@ -81,11 +89,33 @@ clone_impl! { char }
 
 macro_rules! extern_fn_clone {
     ($($A:ident),*) => (
-        #[unstable = "this may not be sufficient for fns with region parameters"]
+        #[unstable(feature = "core",
+                   reason = "this may not be sufficient for fns with region parameters")]
         impl<$($A,)* ReturnType> Clone for extern "Rust" fn($($A),*) -> ReturnType {
-            /// Return a copy of a function pointer
+            /// Returns a copy of a function pointer.
             #[inline]
             fn clone(&self) -> extern "Rust" fn($($A),*) -> ReturnType { *self }
+        }
+
+        #[unstable(feature = "core", reason = "brand new")]
+        impl<$($A,)* ReturnType> Clone for extern "C" fn($($A),*) -> ReturnType {
+            /// Returns a copy of a function pointer.
+            #[inline]
+            fn clone(&self) -> extern "C" fn($($A),*) -> ReturnType { *self }
+        }
+
+        #[unstable(feature = "core", reason = "brand new")]
+        impl<$($A,)* ReturnType> Clone for unsafe extern "Rust" fn($($A),*) -> ReturnType {
+            /// Returns a copy of a function pointer.
+            #[inline]
+            fn clone(&self) -> unsafe extern "Rust" fn($($A),*) -> ReturnType { *self }
+        }
+
+        #[unstable(feature = "core", reason = "brand new")]
+        impl<$($A,)* ReturnType> Clone for unsafe extern "C" fn($($A),*) -> ReturnType {
+            /// Returns a copy of a function pointer.
+            #[inline]
+            fn clone(&self) -> unsafe extern "C" fn($($A),*) -> ReturnType { *self }
         }
     )
 }

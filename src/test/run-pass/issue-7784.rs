@@ -8,7 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+
 #![feature(advanced_slice_patterns)]
+#![feature(slice_patterns)]
 
 use std::ops::Add;
 
@@ -20,7 +22,7 @@ fn bar(a: &'static str, b: &'static str) -> [&'static str; 4] {
 }
 
 fn main() {
-    assert_eq!(foo([1i, 2i, 3i]), (1i, 3i, 6i));
+    assert_eq!(foo([1, 2, 3]), (1, 3, 6));
 
     let [a, b, c, d] = bar("foo", "bar");
     assert_eq!(a, "foo");

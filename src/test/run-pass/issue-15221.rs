@@ -8,6 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// pretty-expanded FIXME #23616
+
 macro_rules! inner {
     ($e:pat ) => ($e)
 }
@@ -17,7 +19,6 @@ macro_rules! outer {
 }
 
 fn main() {
-    let outer!(g1) = 13i;
+    let outer!(g1) = 13;
     g1;
 }
-

@@ -12,6 +12,7 @@
 //! usable for clean
 
 use std::collections::HashSet;
+use std::mem;
 
 use syntax::abi;
 use syntax::ast;
@@ -40,6 +41,7 @@ pub struct RustdocVisitor<'a, 'tcx: 'a> {
     pub cx: &'a core::DocContext<'tcx>,
     pub analysis: Option<&'a core::CrateAnalysis>,
     view_item_stack: HashSet<ast::NodeId>,
+    inlining_from_glob: bool,
 }
 
 impl<'a, 'tcx> RustdocVisitor<'a, 'tcx> {
@@ -54,6 +56,7 @@ impl<'a, 'tcx> RustdocVisitor<'a, 'tcx> {
             cx: cx,
             analysis: analysis,
             view_item_stack: stack,
+            inlining_from_glob: false,
         }
     }
 
@@ -120,7 +123,7 @@ impl<'a, 'tcx> RustdocVisitor<'a, 'tcx> {
 
     pub fn visit_fn(&mut self, item: &ast::Item,
                     name: ast::Ident, fd: &ast::FnDecl,
-                    unsafety: &ast::Unsafety, _abi: &abi::Abi,
+                    unsafety: &ast::Unsafety, abi: &abi::Abi,
                     gen: &ast::Generics) -> Function {
         debug!("Visiting fn");
         Function {
@@ -133,6 +136,7 @@ impl<'a, 'tcx> RustdocVisitor<'a, 'tcx> {
             whence: item.span,
             generics: gen.clone(),
             unsafety: *unsafety,
+            abi: *abi,
         }
     }
 
@@ -147,7 +151,7 @@ impl<'a, 'tcx> RustdocVisitor<'a, 'tcx> {
         om.vis = vis;
         om.stab = self.stability(id);
         om.id = id;
-        for i in m.items.iter() {
+        for i in &m.items {
             self.visit_item(&**i, None, &mut om);
         }
         om
@@ -171,7 +175,7 @@ impl<'a, 'tcx> RustdocVisitor<'a, 'tcx> {
                                      please_inline)
                 }).collect::<Vec<ast::PathListItem>>();
 
-                if mine.len() == 0 {
+                if mine.is_empty() {
                     None
                 } else {
                     Some(ast::ViewPathList(p, mine))
@@ -196,7 +200,7 @@ impl<'a, 'tcx> RustdocVisitor<'a, 'tcx> {
             Some(tcx) => tcx,
             None => return false
         };
-        let def = (*tcx.def_map.borrow())[id].def_id();
+        let def = tcx.def_map.borrow()[&id].def_id();
         if !ast_util::is_local(def) { return false }
         let analysis = match self.analysis {
             Some(analysis) => analysis, None => return false
@@ -209,15 +213,17 @@ impl<'a, 'tcx> RustdocVisitor<'a, 'tcx> {
         let ret = match tcx.map.get(def.node) {
             ast_map::NodeItem(it) => {
                 if glob {
+                    let prev = mem::replace(&mut self.inlining_from_glob, true);
                     match it.node {
                         ast::ItemMod(ref m) => {
-                            for i in m.items.iter() {
+                            for i in &m.items {
                                 self.visit_item(&**i, None, om);
                             }
                         }
                         ast::ItemEnum(..) => {}
                         _ => { panic!("glob not mapped to a module or enum"); }
                     }
+                    self.inlining_from_glob = prev;
                 } else {
                     self.visit_item(it, renamed, om);
                 }
@@ -237,7 +243,7 @@ impl<'a, 'tcx> RustdocVisitor<'a, 'tcx> {
             ast::ItemExternCrate(ref p) => {
                 let path = match *p {
                     None => None,
-                    Some((ref x, _)) => Some(x.get().to_string()),
+                    Some(x) => Some(x.to_string()),
                 };
                 om.extern_crates.push(ExternCrate {
                     name: name,
@@ -253,7 +259,7 @@ impl<'a, 'tcx> RustdocVisitor<'a, 'tcx> {
                     let please_inline = item.attrs.iter().any(|item| {
                         match item.meta_item_list() {
                             Some(list) => {
-                                list.iter().any(|i| i.name().get() == "inline")
+                                list.iter().any(|i| &i.name()[..] == "inline")
                             }
                             None => false,
                         }
@@ -333,7 +339,7 @@ impl<'a, 'tcx> RustdocVisitor<'a, 'tcx> {
                     name: name,
                     items: items.clone(),
                     generics: gen.clone(),
-                    bounds: b.iter().map(|x| (*x).clone()).collect(),
+                    bounds: b.iter().cloned().collect(),
                     id: item.id,
                     attrs: item.attrs.clone(),
                     whence: item.span,
@@ -356,8 +362,25 @@ impl<'a, 'tcx> RustdocVisitor<'a, 'tcx> {
                     vis: item.vis,
                     stab: self.stability(item.id),
                 };
-                om.impls.push(i);
+                // Don't duplicate impls when inlining glob imports, we'll pick
+                // them up regardless of where they're located.
+                if !self.inlining_from_glob {
+                    om.impls.push(i);
+                }
             },
+            ast::ItemDefaultImpl(unsafety, ref trait_ref) => {
+                let i = DefaultImpl {
+                    unsafety: unsafety,
+                    trait_: trait_ref.clone(),
+                    id: item.id,
+                    attrs: item.attrs.clone(),
+                    whence: item.span,
+                };
+                // see comment above about ItemImpl
+                if !self.inlining_from_glob {
+                    om.def_traits.push(i);
+                }
+            }
             ast::ItemForeignMod(ref fm) => {
                 om.foreigns.push(fm.clone());
             }
@@ -375,6 +398,7 @@ impl<'a, 'tcx> RustdocVisitor<'a, 'tcx> {
             name: def.ident,
             whence: def.span,
             stab: self.stability(def.id),
+            imported_from: def.imported_from,
         }
     }
 }

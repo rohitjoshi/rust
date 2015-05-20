@@ -8,8 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[derive(Show)]
-struct Foo(int, int);
+#[derive(Debug)]
+struct Foo(isize, isize);
 
 pub fn main() {
     let x = Foo(1, 2);

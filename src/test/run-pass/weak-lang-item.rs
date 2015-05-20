@@ -10,12 +10,14 @@
 
 // aux-build:weak-lang-items.rs
 
-extern crate "weak-lang-items" as other;
+// pretty-expanded FIXME #23616
 
-use std::thread::Thread;
+extern crate weak_lang_items as other;
+
+use std::thread;
 
 fn main() {
-    let _ = Thread::scoped(move|| {
+    let _ = thread::spawn(move|| {
         other::foo()
     });
 }

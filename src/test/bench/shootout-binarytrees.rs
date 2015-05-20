@@ -38,10 +38,11 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
 // OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#![feature(rustc_private, core, step_by)]
+
 extern crate arena;
 
-use std::iter::range_step;
-use std::thread::{Thread, JoinGuard};
+use std::thread;
 use arena::TypedArena;
 
 struct Tree<'a> {
@@ -84,14 +85,13 @@ fn inner(depth: i32, iterations: i32) -> String {
 }
 
 fn main() {
-    let args = std::os::args();
-    let args = args.as_slice();
-    let n = if std::os::getenv("RUST_BENCH").is_some() {
+    let mut args = std::env::args();
+    let n = if std::env::var_os("RUST_BENCH").is_some() {
         17
-    } else if args.len() <= 1u {
+    } else if args.len() <= 1 {
         8
     } else {
-        args[1].parse().unwrap()
+        args.nth(1).unwrap().parse().unwrap()
     };
     let min_depth = 4;
     let max_depth = if min_depth + 2 > n {min_depth + 2} else {n};
@@ -108,14 +108,13 @@ fn main() {
     let long_lived_arena = TypedArena::new();
     let long_lived_tree = bottom_up_tree(&long_lived_arena, 0, max_depth);
 
-    let messages = range_step(min_depth, max_depth + 1, 2).map(|depth| {
-        use std::num::Int;
-        let iterations = 2.pow((max_depth - depth + min_depth) as usize);
-        Thread::scoped(move || inner(depth, iterations))
+    let messages = (min_depth..max_depth + 1).step_by(2).map(|depth| {
+        let iterations = 2i32.pow((max_depth - depth + min_depth) as u32);
+        thread::spawn(move || inner(depth, iterations))
     }).collect::<Vec<_>>();
 
-    for message in messages.into_iter() {
-        println!("{}", message.join().ok().unwrap());
+    for message in messages {
+        println!("{}", message.join().unwrap());
     }
 
     println!("long lived tree of depth {}\t check: {}",

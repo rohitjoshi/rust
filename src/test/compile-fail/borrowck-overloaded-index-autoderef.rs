@@ -18,11 +18,11 @@ struct Foo {
     y: isize,
 }
 
-impl Index<String> for Foo {
+impl<'a> Index<&'a String> for Foo {
     type Output = isize;
 
-    fn index<'a>(&'a self, z: &String) -> &'a isize {
-        if z.as_slice() == "x" {
+    fn index(&self, z: &String) -> &isize {
+        if *z == "x" {
             &self.x
         } else {
             &self.y
@@ -30,11 +30,9 @@ impl Index<String> for Foo {
     }
 }
 
-impl IndexMut<String> for Foo {
-    type Output = isize;
-
-    fn index_mut<'a>(&'a mut self, z: &String) -> &'a mut isize {
-        if z.as_slice() == "x" {
+impl<'a> IndexMut<&'a String> for Foo {
+    fn index_mut(&mut self, z: &String) -> &mut isize {
+        if *z == "x" {
             &mut self.x
         } else {
             &mut self.y
@@ -43,13 +41,13 @@ impl IndexMut<String> for Foo {
 }
 
 fn test1(mut f: Box<Foo>, s: String) {
-    let _p = &mut f[s];
-    let _q = &f[s]; //~ ERROR cannot borrow
+    let _p = &mut f[&s];
+    let _q = &f[&s]; //~ ERROR cannot borrow
 }
 
 fn test2(mut f: Box<Foo>, s: String) {
-    let _p = &mut f[s];
-    let _q = &mut f[s]; //~ ERROR cannot borrow
+    let _p = &mut f[&s];
+    let _q = &mut f[&s]; //~ ERROR cannot borrow
 }
 
 struct Bar {
@@ -57,37 +55,37 @@ struct Bar {
 }
 
 fn test3(mut f: Box<Bar>, s: String) {
-    let _p = &mut f.foo[s];
-    let _q = &mut f.foo[s]; //~ ERROR cannot borrow
+    let _p = &mut f.foo[&s];
+    let _q = &mut f.foo[&s]; //~ ERROR cannot borrow
 }
 
 fn test4(mut f: Box<Bar>, s: String) {
-    let _p = &f.foo[s];
-    let _q = &f.foo[s];
+    let _p = &f.foo[&s];
+    let _q = &f.foo[&s];
 }
 
 fn test5(mut f: Box<Bar>, s: String) {
-    let _p = &f.foo[s];
-    let _q = &mut f.foo[s]; //~ ERROR cannot borrow
+    let _p = &f.foo[&s];
+    let _q = &mut f.foo[&s]; //~ ERROR cannot borrow
 }
 
 fn test6(mut f: Box<Bar>, g: Foo, s: String) {
-    let _p = &f.foo[s];
+    let _p = &f.foo[&s];
     f.foo = g; //~ ERROR cannot assign
 }
 
 fn test7(mut f: Box<Bar>, g: Bar, s: String) {
-    let _p = &f.foo[s];
+    let _p = &f.foo[&s];
     *f = g; //~ ERROR cannot assign
 }
 
 fn test8(mut f: Box<Bar>, g: Foo, s: String) {
-    let _p = &mut f.foo[s];
+    let _p = &mut f.foo[&s];
     f.foo = g; //~ ERROR cannot assign
 }
 
 fn test9(mut f: Box<Bar>, g: Bar, s: String) {
-    let _p = &mut f.foo[s];
+    let _p = &mut f.foo[&s];
     *f = g; //~ ERROR cannot assign
 }
 

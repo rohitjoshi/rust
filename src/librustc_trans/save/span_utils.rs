@@ -24,7 +24,7 @@ use syntax::parse::token::{keywords, Token};
 #[derive(Clone)]
 pub struct SpanUtils<'a> {
     pub sess: &'a Session,
-    pub err_count: Cell<int>,
+    pub err_count: Cell<isize>,
 }
 
 impl<'a> SpanUtils<'a> {
@@ -37,7 +37,7 @@ impl<'a> SpanUtils<'a> {
         let lo_pos_byte = self.sess.codemap().lookup_byte_offset(span.lo).pos;
         let hi_pos_byte = self.sess.codemap().lookup_byte_offset(span.hi).pos;
 
-        format!("file_name,{},file_line,{},file_col,{},extent_start,{},extent_start_bytes,{},\
+        format!("file_name,\"{}\",file_line,{},file_col,{},extent_start,{},extent_start_bytes,{},\
                  file_line_end,{},file_col_end,{},extent_end,{},extent_end_bytes,{}",
                 lo_loc.file.name,
                 lo_loc.line, lo_loc.col.to_usize(), lo_pos.to_usize(), lo_pos_byte.to_usize(),
@@ -69,8 +69,8 @@ impl<'a> SpanUtils<'a> {
 
     pub fn snippet(&self, span: Span) -> String {
         match self.sess.codemap().span_to_snippet(span) {
-            Some(s) => s,
-            None => String::new(),
+            Ok(s) => s,
+            Err(_) => String::new(),
         }
     }
 
@@ -94,14 +94,14 @@ impl<'a> SpanUtils<'a> {
         let mut result = None;
 
         let mut toks = self.retokenise_span(span);
-        let mut bracket_count = 0u;
+        let mut bracket_count = 0;
         loop {
             let ts = toks.real_token();
             if ts.tok == token::Eof {
                 return self.make_sub_span(span, result)
             }
             if bracket_count == 0 &&
-               (ts.tok.is_ident() || ts.tok.is_keyword(keywords::Self)) {
+               (ts.tok.is_ident() || ts.tok.is_keyword(keywords::SelfValue)) {
                 result = Some(ts.sp);
             }
 
@@ -117,14 +117,14 @@ impl<'a> SpanUtils<'a> {
     // Return the span for the first identifier in the path.
     pub fn span_for_first_ident(&self, span: Span) -> Option<Span> {
         let mut toks = self.retokenise_span(span);
-        let mut bracket_count = 0u;
+        let mut bracket_count = 0;
         loop {
             let ts = toks.real_token();
             if ts.tok == token::Eof {
                 return None;
             }
             if bracket_count == 0 &&
-               (ts.tok.is_ident() || ts.tok.is_keyword(keywords::Self)) {
+               (ts.tok.is_ident() || ts.tok.is_keyword(keywords::SelfValue)) {
                 return self.make_sub_span(span, Some(ts.sp));
             }
 
@@ -143,7 +143,7 @@ impl<'a> SpanUtils<'a> {
         let mut toks = self.retokenise_span(span);
         let mut prev = toks.real_token();
         let mut result = None;
-        let mut bracket_count = 0u;
+        let mut bracket_count = 0;
         let mut last_span = None;
         while prev.tok != token::Eof {
             last_span = None;
@@ -191,7 +191,7 @@ impl<'a> SpanUtils<'a> {
         let mut toks = self.retokenise_span(span);
         let mut prev = toks.real_token();
         let mut result = None;
-        let mut bracket_count = 0u;
+        let mut bracket_count = 0;
         loop {
             let next = toks.real_token();
 
@@ -205,6 +205,7 @@ impl<'a> SpanUtils<'a> {
             bracket_count += match prev.tok {
                 token::Lt => 1,
                 token::Gt => -1,
+                token::BinOp(token::Shl) => 2,
                 token::BinOp(token::Shr) => -2,
                 _ => 0
             };
@@ -218,7 +219,7 @@ impl<'a> SpanUtils<'a> {
             let loc = self.sess.codemap().lookup_char_pos(span.lo);
             self.sess.span_bug(span,
                 &format!("Mis-counted brackets when breaking path? Parsing '{}' in {}, line {}",
-                        self.snippet(span), loc.file.name, loc.line)[]);
+                        self.snippet(span), loc.file.name, loc.line));
         }
         if result.is_none() && prev.tok.is_ident() && bracket_count == 0 {
             return self.make_sub_span(span, Some(prev.sp));
@@ -229,14 +230,15 @@ impl<'a> SpanUtils<'a> {
     // Reparse span and return an owned vector of sub spans of the first limit
     // identifier tokens in the given nesting level.
     // example with Foo<Bar<T,V>, Bar<T,V>>
-    // Nesting = 0: all idents outside of brackets: ~[Foo]
-    // Nesting = 1: idents within one level of brackets: ~[Bar, Bar]
-    pub fn spans_with_brackets(&self, span: Span, nesting: int, limit: int) -> Vec<Span> {
+    // Nesting = 0: all idents outside of brackets: [Foo]
+    // Nesting = 1: idents within one level of brackets: [Bar, Bar]
+    pub fn spans_with_brackets(&self, span: Span, nesting: isize, limit: isize) -> Vec<Span> {
         let mut result: Vec<Span> = vec!();
 
         let mut toks = self.retokenise_span(span);
         // We keep track of how many brackets we're nested in
-        let mut bracket_count = 0i;
+        let mut bracket_count: isize = 0;
+        let mut found_ufcs_sep = false;
         loop {
             let ts = toks.real_token();
             if ts.tok == token::Eof {
@@ -244,11 +246,11 @@ impl<'a> SpanUtils<'a> {
                     let loc = self.sess.codemap().lookup_char_pos(span.lo);
                     self.sess.span_bug(span, &format!(
                         "Mis-counted brackets when breaking path? Parsing '{}' in {}, line {}",
-                         self.snippet(span), loc.file.name, loc.line)[]);
+                         self.snippet(span), loc.file.name, loc.line));
                 }
                 return result
             }
-            if (result.len() as int) == limit {
+            if (result.len() as isize) == limit {
                 return result;
             }
             bracket_count += match ts.tok {
@@ -258,8 +260,22 @@ impl<'a> SpanUtils<'a> {
                 token::BinOp(token::Shr) => -2,
                 _ => 0
             };
-            if ts.tok.is_ident() &&
-               bracket_count == nesting {
+
+            // Ignore the `>::` in `<Type as Trait>::AssocTy`.
+
+            // The root cause of this hack is that the AST representation of
+            // qpaths is horrible. It treats <A as B>::C as a path with two
+            // segments, B and C and notes that there is also a self type A at
+            // position 0. Because we don't have spans for individual idents,
+            // only the whole path, we have to iterate over the tokens in the
+            // path, trying to pull out the non-nested idents (e.g., avoiding 'a
+            // in `<A as B<'a>>::C`). So we end up with a span for `B>::C` from
+            // the start of the first ident to the end of the path.
+            if !found_ufcs_sep && bracket_count == -1 {
+                found_ufcs_sep = true;
+                bracket_count += 1;
+            }
+            if ts.tok.is_ident() && bracket_count == nesting {
                 result.push(self.make_sub_span(span, Some(ts.sp)).unwrap());
             }
         }
@@ -296,13 +312,25 @@ impl<'a> SpanUtils<'a> {
     pub fn sub_span_after_keyword(&self,
                                   span: Span,
                                   keyword: keywords::Keyword) -> Option<Span> {
+        self.sub_span_after(span, |t| t.is_keyword(keyword))
+    }
+
+    pub fn sub_span_after_token(&self,
+                                span: Span,
+                                tok: Token) -> Option<Span> {
+        self.sub_span_after(span, |t| t == tok)
+    }
+
+    fn sub_span_after<F: Fn(Token) -> bool>(&self,
+                                            span: Span,
+                                            f: F) -> Option<Span> {
         let mut toks = self.retokenise_span(span);
         loop {
             let ts = toks.real_token();
             if ts.tok == token::Eof {
                 return None;
             }
-            if ts.tok.is_keyword(keyword) {
+            if f(ts.tok) {
                 let ts = toks.real_token();
                 if ts.tok == token::Eof {
                     return None
@@ -313,7 +341,8 @@ impl<'a> SpanUtils<'a> {
         }
     }
 
-    // Returns a list of the spans of idents in a patch.
+
+    // Returns a list of the spans of idents in a path.
     // E.g., For foo::bar<x,t>::baz, we return [foo, bar, baz] (well, their spans)
     pub fn spans_for_path_segments(&self, path: &ast::Path) -> Vec<Span> {
         if generated_code(path.span) {
@@ -325,12 +354,12 @@ impl<'a> SpanUtils<'a> {
 
     // Return an owned vector of the subspans of the param identifier
     // tokens found in span.
-    pub fn spans_for_ty_params(&self, span: Span, number: int) -> Vec<Span> {
+    pub fn spans_for_ty_params(&self, span: Span, number: isize) -> Vec<Span> {
         if generated_code(span) {
             return vec!();
         }
         // Type params are nested within one level of brackets:
-        // i.e. we want ~[A, B] from Foo<A, B<T,U>>
+        // i.e. we want Vec<A, B> from Foo<A, B<T,U>>
         self.spans_with_brackets(span, 1, number)
     }
 

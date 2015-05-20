@@ -14,21 +14,26 @@
 //!
 //! This API is completely unstable and subject to change.
 
+// Do not remove on snapshot creation. Needed for bootstrap. (Issue #22364)
+#![cfg_attr(stage0, feature(custom_attribute))]
 #![crate_name = "syntax"]
-#![unstable]
+#![unstable(feature = "rustc_private")]
 #![staged_api]
 #![crate_type = "dylib"]
 #![crate_type = "rlib"]
 #![doc(html_logo_url = "http://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
-       html_favicon_url = "http://www.rust-lang.org/favicon.ico",
+       html_favicon_url = "https://doc.rust-lang.org/favicon.ico",
        html_root_url = "http://doc.rust-lang.org/nightly/")]
 
-#![allow(unknown_features)]
-#![feature(slicing_syntax)]
-#![feature(box_syntax)]
-#![feature(quote, unsafe_destructor)]
-#![allow(unknown_features)] #![feature(int_uint)]
-#![allow(unstable)]
+#![feature(associated_consts)]
+#![feature(collections)]
+#![feature(collections_drain)]
+#![feature(core)]
+#![feature(libc)]
+#![feature(rustc_private)]
+#![feature(staged_api)]
+#![feature(str_char)]
+#![feature(unicode)]
 
 extern crate arena;
 extern crate fmt_macros;
@@ -38,7 +43,22 @@ extern crate libc;
 #[macro_use] extern crate log;
 #[macro_use] #[no_link] extern crate rustc_bitflags;
 
-extern crate "serialize" as rustc_serialize; // used by deriving
+extern crate serialize as rustc_serialize; // used by deriving
+
+// A variant of 'try!' that panics on Err(FatalError). This is used as a
+// crutch on the way towards a non-panic!-prone parser. It should be used
+// for fatal parsing errors; eventually we plan to convert all code using
+// panictry to just use normal try
+macro_rules! panictry {
+    ($e:expr) => ({
+        use std::result::Result::{Ok, Err};
+        use diagnostic::FatalError;
+        match $e {
+            Ok(e) => e,
+            Err(FatalError) => panic!(FatalError)
+        }
+    })
+}
 
 pub mod util {
     pub mod interner;
@@ -51,6 +71,7 @@ pub mod diagnostics {
     pub mod macros;
     pub mod plugin;
     pub mod registry;
+    pub mod metadata;
 }
 
 pub mod syntax {
@@ -74,6 +95,7 @@ pub mod parse;
 pub mod ptr;
 pub mod show_span;
 pub mod std_inject;
+pub mod str;
 pub mod test;
 pub mod visit;
 
@@ -87,7 +109,6 @@ pub mod ext {
     pub mod base;
     pub mod build;
     pub mod cfg;
-    pub mod cfg_attr;
     pub mod concat;
     pub mod concat_idents;
     pub mod deriving;

@@ -14,18 +14,17 @@
 use core::prelude::*;
 
 use {Rng, SeedableRng};
-use core::default::Default;
 
 /// How many bytes of entropy the underling RNG is allowed to generate
 /// before it is reseeded.
-static DEFAULT_GENERATION_THRESHOLD: uint = 32 * 1024;
+const DEFAULT_GENERATION_THRESHOLD: usize = 32 * 1024;
 
 /// A wrapper around any RNG which reseeds the underlying RNG after it
 /// has generated a certain number of random bytes.
 pub struct ReseedingRng<R, Rsdr> {
     rng: R,
-    generation_threshold: uint,
-    bytes_generated: uint,
+    generation_threshold: usize,
+    bytes_generated: usize,
     /// Controls the behaviour when reseeding the RNG.
     pub reseeder: Rsdr,
 }
@@ -38,7 +37,7 @@ impl<R: Rng, Rsdr: Reseeder<R>> ReseedingRng<R, Rsdr> {
     /// * `rng`: the random number generator to use.
     /// * `generation_threshold`: the number of bytes of entropy at which to reseed the RNG.
     /// * `reseeder`: the reseeding object to use.
-    pub fn new(rng: R, generation_threshold: uint, reseeder: Rsdr) -> ReseedingRng<R,Rsdr> {
+    pub fn new(rng: R, generation_threshold: usize, reseeder: Rsdr) -> ReseedingRng<R,Rsdr> {
         ReseedingRng {
             rng: rng,
             generation_threshold: generation_threshold,
@@ -99,33 +98,6 @@ impl<S, R: SeedableRng<S>, Rsdr: Reseeder<R> + Default>
 }
 
 /// Something that can be used to reseed an RNG via `ReseedingRng`.
-///
-/// # Example
-///
-/// ```rust
-/// use std::rand::{Rng, SeedableRng, StdRng};
-/// use std::rand::reseeding::{Reseeder, ReseedingRng};
-///
-/// struct TickTockReseeder { tick: bool }
-/// impl Reseeder<StdRng> for TickTockReseeder {
-///     fn reseed(&mut self, rng: &mut StdRng) {
-///         let val = if self.tick {0} else {1};
-///         rng.reseed(&[val]);
-///         self.tick = !self.tick;
-///     }
-/// }
-/// fn main() {
-///     let rsdr = TickTockReseeder { tick: true };
-///
-///     let inner = StdRng::new().unwrap();
-///     let mut rng = ReseedingRng::new(inner, 10, rsdr);
-///
-///     // this will repeat, because it gets reseeded very regularly.
-///     let s: String = rng.gen_ascii_chars().take(100).collect();
-///     println!("{}", s);
-/// }
-///
-/// ```
 pub trait Reseeder<R> {
     /// Reseed the given RNG.
     fn reseed(&mut self, rng: &mut R);
@@ -133,7 +105,7 @@ pub trait Reseeder<R> {
 
 /// Reseed an RNG using a `Default` instance. This reseeds by
 /// replacing the RNG with the result of a `Default::default` call.
-#[derive(Copy)]
+#[derive(Copy, Clone)]
 pub struct ReseedWithDefault;
 
 impl<R: Rng + Default> Reseeder<R> for ReseedWithDefault {
@@ -141,19 +113,18 @@ impl<R: Rng + Default> Reseeder<R> for ReseedWithDefault {
         *rng = Default::default();
     }
 }
-#[stable]
+#[stable(feature = "rust1", since = "1.0.0")]
 impl Default for ReseedWithDefault {
-    #[stable]
+    #[stable(feature = "rust1", since = "1.0.0")]
     fn default() -> ReseedWithDefault { ReseedWithDefault }
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use std::prelude::v1::*;
 
     use core::iter::{order, repeat};
     use super::{ReseedingRng, ReseedWithDefault};
-    use std::default::Default;
     use {SeedableRng, Rng};
 
     struct Counter {
@@ -187,7 +158,7 @@ mod test {
         let mut rs = ReseedingRng::new(Counter {i:0}, 400, ReseedWithDefault);
 
         let mut i = 0;
-        for _ in range(0u, 1000) {
+        for _ in 0..1000 {
             assert_eq!(rs.next_u32(), i % 100);
             i += 1;
         }
@@ -212,11 +183,11 @@ mod test {
         assert_eq!(string1, string2);
     }
 
-    static FILL_BYTES_V_LEN: uint = 13579;
+    const FILL_BYTES_V_LEN: usize = 13579;
     #[test]
     fn test_rng_fill_bytes() {
-        let mut v = repeat(0u8).take(FILL_BYTES_V_LEN).collect::<Vec<_>>();
-        ::test::rng().fill_bytes(v.as_mut_slice());
+        let mut v = repeat(0).take(FILL_BYTES_V_LEN).collect::<Vec<_>>();
+        ::test::rng().fill_bytes(&mut v);
 
         // Sanity test: if we've gotten here, `fill_bytes` has not infinitely
         // recursed.
@@ -225,7 +196,7 @@ mod test {
         // To test that `fill_bytes` actually did something, check that the
         // average of `v` is not 0.
         let mut sum = 0.0;
-        for &x in v.iter() {
+        for &x in &v {
             sum += x as f64;
         }
         assert!(sum / v.len() as f64 != 0.0);

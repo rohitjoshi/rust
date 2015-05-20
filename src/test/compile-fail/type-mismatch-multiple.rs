@@ -10,14 +10,14 @@
 
 // Checking that the compiler reports multiple type errors at once
 
-fn main() { let a: bool = 1is; let b: isize = true; }
+fn main() { let a: bool = 1; let b: i32 = true; }
 //~^ ERROR mismatched types
 //~| expected `bool`
-//~| found `isize`
+//~| found `_`
 //~| expected bool
-//~| found isize
+//~| found integral variable
 //~| ERROR mismatched types
-//~| expected `isize`
+//~| expected `i32`
 //~| found `bool`
-//~| expected isize
+//~| expected i32
 //~| found bool

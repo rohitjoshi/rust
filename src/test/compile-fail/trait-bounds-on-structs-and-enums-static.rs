@@ -8,7 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-trait Trait {}
+trait Trait {
+    fn dummy(&self) { }
+}
 
 struct Foo<T:Trait> {
     x: T,
@@ -21,4 +23,3 @@ static X: Foo<usize> = Foo {
 
 fn main() {
 }
-

@@ -10,6 +10,7 @@
 
 // Test unboxed closure sugar used in object types.
 
+
 #![allow(dead_code)]
 #![feature(unboxed_closures)]
 
@@ -29,7 +30,7 @@ impl<X> Getter<X,X> for Identity {
 }
 
 fn main() {
-    let x: &Getter(int) -> (int,) = &Identity;
+    let x: &Getter<(i32,), (i32,)> = &Identity;
     let (y,) = x.get((22,));
     assert_eq!(y, 22);
 }

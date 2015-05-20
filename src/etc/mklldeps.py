@@ -11,8 +11,6 @@
 import os
 import sys
 import subprocess
-import itertools
-from os import path
 
 f = open(sys.argv[1], 'wb')
 
@@ -35,6 +33,7 @@ f.write("""// Copyright 2013 The Rust Project Developers. See the COPYRIGHT
 //          take a look at src/etc/mklldeps.py if you're interested
 """)
 
+
 def run(args):
     proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     out, err = proc.communicate()
@@ -47,28 +46,27 @@ def run(args):
 
 f.write("\n")
 
-version = run([llconfig, '--version']).strip()
-
 # LLVM libs
-if version < '3.5':
-    args = [llconfig, '--libs']
-else:
-    args = [llconfig, '--libs', '--system-libs']
+args = [llconfig, '--libs', '--system-libs']
 
 args.extend(components)
 out = run(args)
 for lib in out.strip().replace("\n", ' ').split(' '):
-    lib = lib.strip()[2:] # chop of the leading '-l'
+    if len(lib) == 0:
+        continue
+    # in some cases we get extra spaces in between libs so ignore those
+    if len(lib) == 1 and lib == ' ':
+        continue
+    # not all libs strictly follow -lfoo, on Bitrig, there is -pthread
+    if lib[0:2] == '-l':
+        lib = lib.strip()[2:]
+    elif lib[0] == '-':
+        lib = lib.strip()[1:]
     f.write("#[link(name = \"" + lib + "\"")
     # LLVM libraries are all static libraries
     if 'LLVM' in lib:
         f.write(", kind = \"static\"")
     f.write(")]\n")
-
-# llvm-config before 3.5 didn't have a system-libs flag
-if version < '3.5':
-    if os == 'win32':
-        f.write("#[link(name = \"imagehlp\")]")
 
 # LLVM ldflags
 out = run([llconfig, '--ldflags'])
@@ -82,10 +80,13 @@ if enable_static == '1':
     assert('stdlib=libc++' not in out)
     f.write("#[link(name = \"stdc++\", kind = \"static\")]\n")
 else:
+    # Note that we use `cfg_attr` here because on MSVC the C++ standard library
+    # is not c++ or stdc++, but rather the linker takes care of linking the
+    # right standard library.
     if 'stdlib=libc++' in out:
-        f.write("#[link(name = \"c++\")]\n")
+        f.write("#[cfg_attr(not(target_env = \"msvc\"), link(name = \"c++\"))]\n")
     else:
-        f.write("#[link(name = \"stdc++\")]\n")
+        f.write("#[cfg_attr(not(target_env = \"msvc\"), link(name = \"stdc++\"))]\n")
 
 # Attach everything to an extern block
 f.write("extern {}\n")

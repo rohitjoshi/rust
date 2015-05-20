@@ -8,25 +8,22 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(unsafe_destructor)]
-
 static mut DROP_RAN: bool = false;
 
-trait Bar<'b> {
+trait Bar {
     fn do_something(&mut self);
 }
 
-struct BarImpl<'b>;
+struct BarImpl;
 
-impl<'b> Bar<'b> for BarImpl<'b> {
+impl Bar for BarImpl {
     fn do_something(&mut self) {}
 }
 
 
-struct Foo<B>;
+struct Foo<B: Bar>(B);
 
-#[unsafe_destructor]
-impl<'b, B: Bar<'b>> Drop for Foo<B> {
+impl<B: Bar> Drop for Foo<B> {
     fn drop(&mut self) {
         unsafe {
             DROP_RAN = true;
@@ -37,7 +34,7 @@ impl<'b, B: Bar<'b>> Drop for Foo<B> {
 
 fn main() {
     {
-       let _x: Foo<BarImpl> = Foo;
+       let _x: Foo<BarImpl> = Foo(BarImpl);
     }
     unsafe {
         assert_eq!(DROP_RAN, true);

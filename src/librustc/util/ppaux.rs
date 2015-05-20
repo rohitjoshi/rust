@@ -20,15 +20,15 @@ use middle::ty::{ReSkolemized, ReVar, BrEnv};
 use middle::ty::{mt, Ty, ParamTy};
 use middle::ty::{ty_bool, ty_char, ty_struct, ty_enum};
 use middle::ty::{ty_err, ty_str, ty_vec, ty_float, ty_bare_fn};
-use middle::ty::{ty_param, ty_ptr, ty_rptr, ty_tup, ty_open};
-use middle::ty::{ty_closure};
+use middle::ty::{ty_param, ty_ptr, ty_rptr, ty_tup};
+use middle::ty::ty_closure;
 use middle::ty::{ty_uniq, ty_trait, ty_int, ty_uint, ty_infer};
 use middle::ty;
 use middle::ty_fold::TypeFoldable;
 
 use std::collections::HashMap;
 use std::collections::hash_state::HashState;
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 use std::rc::Rc;
 use syntax::abi;
 use syntax::ast_map;
@@ -57,12 +57,12 @@ pub fn note_and_explain_region(cx: &ctxt,
       (ref str, Some(span)) => {
         cx.sess.span_note(
             span,
-            &format!("{}{}{}", prefix, *str, suffix)[]);
+            &format!("{}{}{}", prefix, *str, suffix));
         Some(span)
       }
       (ref str, None) => {
         cx.sess.note(
-            &format!("{}{}{}", prefix, *str, suffix)[]);
+            &format!("{}{}{}", prefix, *str, suffix));
         None
       }
     }
@@ -86,7 +86,7 @@ pub fn explain_region_and_span(cx: &ctxt, region: ty::Region)
     return match region {
       ReScope(scope) => {
         let new_string;
-        let on_unknown_scope = |&:| {
+        let on_unknown_scope = || {
           (format!("unknown scope: {:?}.  Please report a bug.", scope), None)
         };
         let span = match scope.span(&cx.map) {
@@ -100,6 +100,7 @@ pub fn explain_region_and_span(cx: &ctxt, region: ty::Region)
               ast::ExprMethodCall(..) => "method call",
               ast::ExprMatch(_, _, ast::MatchSource::IfLetDesugar { .. }) => "if let",
               ast::ExprMatch(_, _, ast::MatchSource::WhileLetDesugar) =>  "while let",
+              ast::ExprMatch(_, _, ast::MatchSource::ForLoopDesugar) =>  "for",
               ast::ExprMatch(..) => "match",
               _ => "expression",
           },
@@ -112,10 +113,17 @@ pub fn explain_region_and_span(cx: &ctxt, region: ty::Region)
         };
         let scope_decorated_tag = match scope {
             region::CodeExtent::Misc(_) => tag,
+            region::CodeExtent::ParameterScope { .. } => {
+                "scope of parameters for function"
+            }
+            region::CodeExtent::DestructionScope(_) => {
+                new_string = format!("destruction scope surrounding {}", tag);
+                &*new_string
+            }
             region::CodeExtent::Remainder(r) => {
                 new_string = format!("block suffix following statement {}",
                                      r.first_statement_index);
-                new_string.as_slice()
+                &*new_string
             }
         };
         explain_span(cx, scope_decorated_tag, span)
@@ -134,7 +142,7 @@ pub fn explain_region_and_span(cx: &ctxt, region: ty::Region)
           }
         };
 
-        match cx.map.find(fr.scope.node_id()) {
+        match cx.map.find(fr.scope.node_id) {
           Some(ast_map::NodeBlock(ref blk)) => {
               let (msg, opt_span) = explain_span(cx, "block", blk.span);
               (format!("{} {}", prefix, msg), opt_span)
@@ -155,8 +163,8 @@ pub fn explain_region_and_span(cx: &ctxt, region: ty::Region)
 
       ReEmpty => { ("the empty lifetime".to_string(), None) }
 
-      ReEarlyBound(_, _, _, name) => {
-        (format!("{}", token::get_name(name)), None)
+      ReEarlyBound(ref data) => {
+        (format!("{}", token::get_name(data.name)), None)
       }
 
       // I believe these cases should not occur (except when debugging,
@@ -215,8 +223,8 @@ pub fn region_to_string(cx: &ctxt, prefix: &str, space: bool, region: Region) ->
     // `explain_region()` or `note_and_explain_region()`.
     match region {
         ty::ReScope(_) => prefix.to_string(),
-        ty::ReEarlyBound(_, _, _, name) => {
-            token::get_name(name).get().to_string()
+        ty::ReEarlyBound(ref data) => {
+            token::get_name(data.name).to_string()
         }
         ty::ReLateBound(_, br) => bound_region_to_string(cx, prefix, space, br),
         ty::ReFree(ref fr) => bound_region_to_string(cx, prefix, space, fr.bound_region),
@@ -262,13 +270,13 @@ pub fn ty_to_string<'tcx>(cx: &ctxt<'tcx>, typ: &ty::TyS<'tcx>) -> String {
         match unsafety {
             ast::Unsafety::Normal => {}
             ast::Unsafety::Unsafe => {
-                s.push_str(unsafety.to_string().as_slice());
+                s.push_str(&unsafety.to_string());
                 s.push(' ');
             }
         };
 
         if abi != abi::Rust {
-            s.push_str(&format!("extern {} ", abi.to_string())[]);
+            s.push_str(&format!("extern {} ", abi.to_string()));
         };
 
         s.push_str("fn");
@@ -276,7 +284,7 @@ pub fn ty_to_string<'tcx>(cx: &ctxt<'tcx>, typ: &ty::TyS<'tcx>) -> String {
         match ident {
             Some(i) => {
                 s.push(' ');
-                s.push_str(token::get_ident(i).get());
+                s.push_str(&token::get_ident(i));
             }
             _ => { }
         }
@@ -287,7 +295,7 @@ pub fn ty_to_string<'tcx>(cx: &ctxt<'tcx>, typ: &ty::TyS<'tcx>) -> String {
             Some(def_id) => {
                 s.push_str(" {");
                 let path_str = ty::item_path_str(cx, def_id);
-                s.push_str(&path_str[]);
+                s.push_str(&path_str[..]);
                 s.push_str("}");
             }
             None => { }
@@ -298,17 +306,9 @@ pub fn ty_to_string<'tcx>(cx: &ctxt<'tcx>, typ: &ty::TyS<'tcx>) -> String {
 
     fn closure_to_string<'tcx>(cx: &ctxt<'tcx>, cty: &ty::ClosureTy<'tcx>) -> String {
         let mut s = String::new();
-
-        match cty.unsafety {
-            ast::Unsafety::Normal => {}
-            ast::Unsafety::Unsafe => {
-                s.push_str(cty.unsafety.to_string().as_slice());
-                s.push(' ');
-            }
-        };
-
-        push_sig_to_string(cx, &mut s, '|', '|', &cty.sig);
-
+        s.push_str("[closure");
+        push_sig_to_string(cx, &mut s, '(', ')', &cty.sig);
+        s.push(']');
         s
     }
 
@@ -322,7 +322,7 @@ pub fn ty_to_string<'tcx>(cx: &ctxt<'tcx>, typ: &ty::TyS<'tcx>) -> String {
             .iter()
             .map(|a| ty_to_string(cx, *a))
             .collect::<Vec<_>>();
-        s.push_str(strs.connect(", ").as_slice());
+        s.push_str(&strs.connect(", "));
         if sig.0.variadic {
             s.push_str(", ...");
         }
@@ -332,7 +332,7 @@ pub fn ty_to_string<'tcx>(cx: &ctxt<'tcx>, typ: &ty::TyS<'tcx>) -> String {
             ty::FnConverging(t) => {
                 if !ty::type_is_nil(t) {
                    s.push_str(" -> ");
-                   s.push_str(&ty_to_string(cx, t)[]);
+                   s.push_str(&ty_to_string(cx, t));
                 }
             }
             ty::FnDiverging => {
@@ -349,7 +349,8 @@ pub fn ty_to_string<'tcx>(cx: &ctxt<'tcx>, typ: &ty::TyS<'tcx>) -> String {
             ty::FloatVar(ref vid) if print_var_ids => vid.repr(cx),
             ty::TyVar(_) | ty::IntVar(_) | ty::FloatVar(_) => format!("_"),
             ty::FreshTy(v) => format!("FreshTy({})", v),
-            ty::FreshIntTy(v) => format!("FreshIntTy({})", v)
+            ty::FreshIntTy(v) => format!("FreshIntTy({})", v),
+            ty::FreshFloatTy(v) => format!("FreshFloatTy({})", v)
         }
     }
 
@@ -369,17 +370,15 @@ pub fn ty_to_string<'tcx>(cx: &ctxt<'tcx>, typ: &ty::TyS<'tcx>) -> String {
         }
         ty_rptr(r, ref tm) => {
             let mut buf = region_ptr_to_string(cx, *r);
-            buf.push_str(&mt_to_string(cx, tm)[]);
+            buf.push_str(&mt_to_string(cx, tm));
             buf
         }
-        ty_open(typ) =>
-            format!("opened<{}>", ty_to_string(cx, typ)),
         ty_tup(ref elems) => {
             let strs = elems
                 .iter()
                 .map(|elem| ty_to_string(cx, *elem))
                 .collect::<Vec<_>>();
-            match &strs[] {
+            match &strs[..] {
                 [ref string] => format!("({},)", string),
                 strs => format!("({})", strs.connect(", "))
             }
@@ -389,28 +388,14 @@ pub fn ty_to_string<'tcx>(cx: &ctxt<'tcx>, typ: &ty::TyS<'tcx>) -> String {
         }
         ty_infer(infer_ty) => infer_ty_to_string(cx, infer_ty),
         ty_err => "[type error]".to_string(),
-        ty_param(ref param_ty) => {
-            if cx.sess.verbose() {
-                param_ty.repr(cx)
-            } else {
-                param_ty.user_string(cx)
-            }
-        }
+        ty_param(ref param_ty) => param_ty.user_string(cx),
         ty_enum(did, substs) | ty_struct(did, substs) => {
             let base = ty::item_path_str(cx, did);
-            let generics = ty::lookup_item_type(cx, did).generics;
-            parameterized(cx, base.as_slice(), substs, &generics, did)
+            parameterized(cx, &base, substs, did, &[],
+                          || ty::lookup_item_type(cx, did).generics)
         }
-        ty_trait(box ty::TyTrait {
-            ref principal, ref bounds
-        }) => {
-            let principal = principal.user_string(cx);
-            let bound_str = bounds.user_string(cx);
-            let bound_sep = if bound_str.is_empty() { "" } else { " + " };
-            format!("{}{}{}",
-                    principal,
-                    bound_sep,
-                    bound_str)
+        ty_trait(ref data) => {
+            data.user_string(cx)
         }
         ty::ty_projection(ref data) => {
             format!("<{} as {}>::{}",
@@ -419,15 +404,16 @@ pub fn ty_to_string<'tcx>(cx: &ctxt<'tcx>, typ: &ty::TyS<'tcx>) -> String {
                     data.item_name.user_string(cx))
         }
         ty_str => "str".to_string(),
-        ty_closure(ref did, _, substs) => {
-            cx.closures.borrow().get(did).map(|cl| {
-                closure_to_string(cx, &cl.closure_type.subst(cx, substs))
+        ty_closure(ref did, substs) => {
+            let closure_tys = cx.closure_tys.borrow();
+            closure_tys.get(did).map(|closure_type| {
+                closure_to_string(cx, &closure_type.subst(cx, substs))
             }).unwrap_or_else(|| {
                 if did.krate == ast::LOCAL_CRATE {
                     let span = cx.map.span(did.node);
-                    format!("closure[{}]", span.repr(cx))
+                    format!("[closure {}]", span.repr(cx))
                 } else {
-                    format!("closure")
+                    format!("[closure]")
                 }
             })
         }
@@ -454,22 +440,40 @@ pub fn explicit_self_category_to_str(category: &ty::ExplicitSelfCategory)
     }
 }
 
-pub fn parameterized<'tcx>(cx: &ctxt<'tcx>,
-                           base: &str,
-                           substs: &subst::Substs<'tcx>,
-                           generics: &ty::Generics<'tcx>,
-                           did: ast::DefId)
-                           -> String
+pub fn parameterized<'tcx,GG>(cx: &ctxt<'tcx>,
+                              base: &str,
+                              substs: &subst::Substs<'tcx>,
+                              did: ast::DefId,
+                              projections: &[ty::ProjectionPredicate<'tcx>],
+                              get_generics: GG)
+                              -> String
+    where GG : FnOnce() -> ty::Generics<'tcx>
 {
     if cx.sess.verbose() {
-        if substs.is_noop() {
-            return format!("{}", base);
-        } else {
-            return format!("{}<{},{}>",
-                           base,
-                           substs.regions.repr(cx),
-                           substs.types.repr(cx));
+        let mut strings = vec![];
+        match substs.regions {
+            subst::ErasedRegions => {
+                strings.push(format!(".."));
+            }
+            subst::NonerasedRegions(ref regions) => {
+                for region in regions.iter() {
+                    strings.push(region.repr(cx));
+                }
+            }
         }
+        for ty in substs.types.iter() {
+            strings.push(ty.repr(cx));
+        }
+        for projection in projections.iter() {
+            strings.push(format!("{}={}",
+                                 projection.projection_ty.item_name.user_string(cx),
+                                 projection.ty.user_string(cx)));
+        }
+        return if strings.is_empty() {
+            format!("{}", base)
+        } else {
+            format!("{}<{}>", base, strings.connect(","))
+        };
     }
 
     let mut strs = Vec::new();
@@ -493,13 +497,33 @@ pub fn parameterized<'tcx>(cx: &ctxt<'tcx>,
         }
     }
 
+    // It is important to execute this conditionally, only if -Z
+    // verbose is false. Otherwise, debug logs can sometimes cause
+    // ICEs trying to fetch the generics early in the pipeline. This
+    // is kind of a hacky workaround in that -Z verbose is required to
+    // avoid those ICEs.
+    let generics = get_generics();
+
+    let has_self = substs.self_ty().is_some();
     let tps = substs.types.get_slice(subst::TypeSpace);
     let ty_params = generics.types.get_slice(subst::TypeSpace);
     let has_defaults = ty_params.last().map_or(false, |def| def.default.is_some());
     let num_defaults = if has_defaults {
         ty_params.iter().zip(tps.iter()).rev().take_while(|&(def, &actual)| {
             match def.default {
-                Some(default) => default.subst(cx, substs) == actual,
+                Some(default) => {
+                    if !has_self && ty::type_has_self(default) {
+                        // In an object type, there is no `Self`, and
+                        // thus if the default value references Self,
+                        // the user will be required to give an
+                        // explicit value. We can't even do the
+                        // substitution below to check without causing
+                        // an ICE. (#18956).
+                        false
+                    } else {
+                        default.subst(cx, substs) == actual
+                    }
+                }
                 None => false
             }
         }).count()
@@ -507,11 +531,24 @@ pub fn parameterized<'tcx>(cx: &ctxt<'tcx>,
         0
     };
 
-    for t in tps[..tps.len() - num_defaults].iter() {
+    for t in &tps[..tps.len() - num_defaults] {
         strs.push(ty_to_string(cx, *t))
     }
 
-    if cx.lang_items.fn_trait_kind(did).is_some() {
+    for projection in projections {
+        strs.push(format!("{}={}",
+                          projection.projection_ty.item_name.user_string(cx),
+                          projection.ty.user_string(cx)));
+    }
+
+    if cx.lang_items.fn_trait_kind(did).is_some() && projections.len() == 1 {
+        let projection_ty = projections[0].ty;
+        let tail =
+            if ty::type_is_nil(projection_ty) {
+                format!("")
+            } else {
+                format!(" -> {}", projection_ty.user_string(cx))
+            };
         format!("{}({}){}",
                 base,
                 if strs[0].starts_with("(") && strs[0].ends_with(",)") {
@@ -519,10 +556,10 @@ pub fn parameterized<'tcx>(cx: &ctxt<'tcx>,
                 } else if strs[0].starts_with("(") && strs[0].ends_with(")") {
                     &strs[0][1 .. strs[0].len() - 1] // Remove '(' and ')'
                 } else {
-                    &strs[0][]
+                    &strs[0][..]
                 },
-                if &*strs[1] == "()" { String::new() } else { format!(" -> {}", strs[1]) })
-    } else if strs.len() > 0 {
+                tail)
+    } else if !strs.is_empty() {
         format!("{}<{}>", base, strs.connect(", "))
     } else {
         format!("{}", base)
@@ -531,8 +568,8 @@ pub fn parameterized<'tcx>(cx: &ctxt<'tcx>,
 
 pub fn ty_to_short_str<'tcx>(cx: &ctxt<'tcx>, typ: Ty<'tcx>) -> String {
     let mut s = typ.repr(cx).to_string();
-    if s.len() >= 32u {
-        s = (&s[0u..32u]).to_string();
+    if s.len() >= 32 {
+        s = (&s[0..32]).to_string();
     }
     return s;
 }
@@ -597,15 +634,15 @@ impl<'tcx, T:Repr<'tcx>> Repr<'tcx> for [T] {
 
 impl<'tcx, T:Repr<'tcx>> Repr<'tcx> for OwnedSlice<T> {
     fn repr(&self, tcx: &ctxt<'tcx>) -> String {
-        repr_vec(tcx, &self[])
+        repr_vec(tcx, &self[..])
     }
 }
 
-// This is necessary to handle types like Option<~[T]>, for which
+// This is necessary to handle types like Option<Vec<T>>, for which
 // autoderef cannot convert the &[T] handler
 impl<'tcx, T:Repr<'tcx>> Repr<'tcx> for Vec<T> {
     fn repr(&self, tcx: &ctxt<'tcx>) -> String {
-        repr_vec(tcx, &self[])
+        repr_vec(tcx, &self[..])
     }
 }
 
@@ -623,11 +660,67 @@ impl<'tcx> Repr<'tcx> for def::Def {
     }
 }
 
+/// This curious type is here to help pretty-print trait objects. In
+/// a trait object, the projections are stored separately from the
+/// main trait bound, but in fact we want to package them together
+/// when printing out; they also have separate binders, but we want
+/// them to share a binder when we print them out. (And the binder
+/// pretty-printing logic is kind of clever and we don't want to
+/// reproduce it.) So we just repackage up the structure somewhat.
+///
+/// Right now there is only one trait in an object that can have
+/// projection bounds, so we just stuff them altogether. But in
+/// reality we should eventually sort things out better.
+type TraitAndProjections<'tcx> =
+    (ty::TraitRef<'tcx>, Vec<ty::ProjectionPredicate<'tcx>>);
+
+impl<'tcx> UserString<'tcx> for TraitAndProjections<'tcx> {
+    fn user_string(&self, tcx: &ctxt<'tcx>) -> String {
+        let &(ref trait_ref, ref projection_bounds) = self;
+        let base = ty::item_path_str(tcx, trait_ref.def_id);
+        parameterized(tcx,
+                      &base,
+                      trait_ref.substs,
+                      trait_ref.def_id,
+                      &projection_bounds[..],
+                      || ty::lookup_trait_def(tcx, trait_ref.def_id).generics.clone())
+    }
+}
+
+impl<'tcx> UserString<'tcx> for ty::TyTrait<'tcx> {
+    fn user_string(&self, tcx: &ctxt<'tcx>) -> String {
+        let &ty::TyTrait { ref principal, ref bounds } = self;
+
+        let mut components = vec![];
+
+        let tap: ty::Binder<TraitAndProjections<'tcx>> =
+            ty::Binder((principal.0.clone(),
+                        bounds.projection_bounds.iter().map(|x| x.0.clone()).collect()));
+
+        // Generate the main trait ref, including associated types.
+        components.push(tap.user_string(tcx));
+
+        // Builtin bounds.
+        for bound in &bounds.builtin_bounds {
+            components.push(bound.user_string(tcx));
+        }
+
+        // Region, if not obviously implied by builtin bounds.
+        if bounds.region_bound != ty::ReStatic {
+            // Region bound is implied by builtin bounds:
+            components.push(bounds.region_bound.user_string(tcx));
+        }
+
+        components.retain(|s| !s.is_empty());
+
+        components.connect(" + ")
+    }
+}
+
 impl<'tcx> Repr<'tcx> for ty::TypeParameterDef<'tcx> {
-    fn repr(&self, tcx: &ctxt<'tcx>) -> String {
-        format!("TypeParameterDef({:?}, {}, {:?}/{})",
+    fn repr(&self, _tcx: &ctxt<'tcx>) -> String {
+        format!("TypeParameterDef({:?}, {:?}/{})",
                 self.def_id,
-                self.bounds.repr(tcx),
                 self.space,
                 self.index)
     }
@@ -689,7 +782,7 @@ impl<'tcx> Repr<'tcx> for subst::RegionSubsts {
 impl<'tcx> Repr<'tcx> for ty::BuiltinBounds {
     fn repr(&self, _tcx: &ctxt) -> String {
         let mut res = Vec::new();
-        for b in self.iter() {
+        for b in self {
             res.push(match b {
                 ty::BoundSend => "Send".to_string(),
                 ty::BoundSized => "Sized".to_string(),
@@ -701,17 +794,11 @@ impl<'tcx> Repr<'tcx> for ty::BuiltinBounds {
     }
 }
 
-impl<'tcx> Repr<'tcx> for ty::ExistentialBounds<'tcx> {
-    fn repr(&self, tcx: &ctxt<'tcx>) -> String {
-        self.user_string(tcx)
-    }
-}
-
 impl<'tcx> Repr<'tcx> for ty::ParamBounds<'tcx> {
     fn repr(&self, tcx: &ctxt<'tcx>) -> String {
         let mut res = Vec::new();
         res.push(self.builtin_bounds.repr(tcx));
-        for t in self.trait_bounds.iter() {
+        for t in &self.trait_bounds {
             res.push(t.repr(tcx));
         }
         res.connect("+")
@@ -724,32 +811,31 @@ impl<'tcx> Repr<'tcx> for ty::TraitRef<'tcx> {
         // to enumerate the `for<...>` etc because the debruijn index
         // tells you everything you need to know.
         let base = ty::item_path_str(tcx, self.def_id);
-        let trait_def = ty::lookup_trait_def(tcx, self.def_id);
-        format!("TraitRef({}, {})",
-                self.substs.self_ty().repr(tcx),
-                parameterized(tcx, base.as_slice(), self.substs, &trait_def.generics, self.def_id))
+        let result = parameterized(tcx, &base, self.substs, self.def_id, &[],
+                      || ty::lookup_trait_def(tcx, self.def_id).generics.clone());
+        match self.substs.self_ty() {
+            None => result,
+            Some(sty) => format!("<{} as {}>", sty.repr(tcx), result)
+        }
     }
 }
 
 impl<'tcx> Repr<'tcx> for ty::TraitDef<'tcx> {
     fn repr(&self, tcx: &ctxt<'tcx>) -> String {
-        format!("TraitDef(generics={}, bounds={}, trait_ref={})",
+        format!("TraitDef(generics={}, trait_ref={})",
                 self.generics.repr(tcx),
-                self.bounds.repr(tcx),
                 self.trait_ref.repr(tcx))
     }
 }
 
 impl<'tcx> Repr<'tcx> for ast::TraitItem {
     fn repr(&self, _tcx: &ctxt) -> String {
-        match *self {
-            ast::RequiredMethod(ref data) => format!("RequiredMethod({}, id={})",
-                                                     data.ident, data.id),
-            ast::ProvidedMethod(ref data) => format!("ProvidedMethod(id={})",
-                                                     data.id),
-            ast::TypeTraitItem(ref data) => format!("TypeTraitItem({}, id={})",
-                                                     data.ty_param.ident, data.ty_param.id),
-        }
+        let kind = match self.node {
+            ast::ConstTraitItem(..) => "ConstTraitItem",
+            ast::MethodTraitItem(..) => "MethodTraitItem",
+            ast::TypeTraitItem(..) => "TypeTraitItem",
+        };
+        format!("{}({}, id={})", kind, self.ident, self.id)
     }
 }
 
@@ -819,12 +905,12 @@ impl<'tcx> Repr<'tcx> for ty::BoundRegion {
 impl<'tcx> Repr<'tcx> for ty::Region {
     fn repr(&self, tcx: &ctxt) -> String {
         match *self {
-            ty::ReEarlyBound(id, space, index, name) => {
+            ty::ReEarlyBound(ref data) => {
                 format!("ReEarlyBound({}, {:?}, {}, {})",
-                               id,
-                               space,
-                               index,
-                               token::get_name(name))
+                        data.param_id,
+                        data.space,
+                        data.index,
+                        token::get_name(data.name))
             }
 
             ty::ReLateBound(binder_id, ref bound_region) => {
@@ -867,7 +953,7 @@ impl<'tcx> UserString<'tcx> for ty::Region {
 impl<'tcx> Repr<'tcx> for ty::FreeRegion {
     fn repr(&self, tcx: &ctxt) -> String {
         format!("ReFree({}, {})",
-                self.scope.node_id(),
+                self.scope.repr(tcx),
                 self.bound_region.repr(tcx))
     }
 }
@@ -875,10 +961,23 @@ impl<'tcx> Repr<'tcx> for ty::FreeRegion {
 impl<'tcx> Repr<'tcx> for region::CodeExtent {
     fn repr(&self, _tcx: &ctxt) -> String {
         match *self {
+            region::CodeExtent::ParameterScope { fn_id, body_id } =>
+                format!("ParameterScope({}, {})", fn_id, body_id),
             region::CodeExtent::Misc(node_id) =>
                 format!("Misc({})", node_id),
+            region::CodeExtent::DestructionScope(node_id) =>
+                format!("DestructionScope({})", node_id),
             region::CodeExtent::Remainder(rem) =>
                 format!("Remainder({}, {})", rem.block, rem.first_statement_index),
+        }
+    }
+}
+
+impl<'tcx> Repr<'tcx> for region::DestructionScopeData {
+    fn repr(&self, _tcx: &ctxt) -> String {
+        match *self {
+            region::DestructionScopeData{ node_id } =>
+                format!("DestructionScopeData {{ node_id: {} }}", node_id),
         }
     }
 }
@@ -918,16 +1017,22 @@ impl<'tcx> Repr<'tcx> for ty::TypeScheme<'tcx> {
 
 impl<'tcx> Repr<'tcx> for ty::Generics<'tcx> {
     fn repr(&self, tcx: &ctxt<'tcx>) -> String {
-        format!("Generics(types: {}, regions: {}, predicates: {})",
+        format!("Generics(types: {}, regions: {})",
                 self.types.repr(tcx),
-                self.regions.repr(tcx),
+                self.regions.repr(tcx))
+    }
+}
+
+impl<'tcx> Repr<'tcx> for ty::GenericPredicates<'tcx> {
+    fn repr(&self, tcx: &ctxt<'tcx>) -> String {
+        format!("GenericPredicates(predicates: {})",
                 self.predicates.repr(tcx))
     }
 }
 
-impl<'tcx> Repr<'tcx> for ty::GenericBounds<'tcx> {
+impl<'tcx> Repr<'tcx> for ty::InstantiatedPredicates<'tcx> {
     fn repr(&self, tcx: &ctxt<'tcx>) -> String {
-        format!("GenericBounds({})",
+        format!("InstantiatedPredicates({})",
                 self.predicates.repr(tcx))
     }
 }
@@ -951,12 +1056,43 @@ impl<'tcx> Repr<'tcx> for ty::Variance {
     }
 }
 
+impl<'tcx> Repr<'tcx> for ty::ImplOrTraitItem<'tcx> {
+    fn repr(&self, tcx: &ctxt<'tcx>) -> String {
+        format!("ImplOrTraitItem({})",
+                match *self {
+                    ty::ImplOrTraitItem::MethodTraitItem(ref i) => i.repr(tcx),
+                    ty::ImplOrTraitItem::ConstTraitItem(ref i) => i.repr(tcx),
+                    ty::ImplOrTraitItem::TypeTraitItem(ref i) => i.repr(tcx),
+                })
+    }
+}
+
+impl<'tcx> Repr<'tcx> for ty::AssociatedConst<'tcx> {
+    fn repr(&self, tcx: &ctxt<'tcx>) -> String {
+        format!("AssociatedConst(name: {}, ty: {}, vis: {}, def_id: {})",
+                self.name.repr(tcx),
+                self.ty.repr(tcx),
+                self.vis.repr(tcx),
+                self.def_id.repr(tcx))
+    }
+}
+
+impl<'tcx> Repr<'tcx> for ty::AssociatedType {
+    fn repr(&self, tcx: &ctxt<'tcx>) -> String {
+        format!("AssociatedType(name: {}, vis: {}, def_id: {})",
+                self.name.repr(tcx),
+                self.vis.repr(tcx),
+                self.def_id.repr(tcx))
+    }
+}
+
 impl<'tcx> Repr<'tcx> for ty::Method<'tcx> {
     fn repr(&self, tcx: &ctxt<'tcx>) -> String {
-        format!("method(name: {}, generics: {}, fty: {}, \
+        format!("Method(name: {}, generics: {}, predicates: {}, fty: {}, \
                  explicit_self: {}, vis: {}, def_id: {})",
                 self.name.repr(tcx),
                 self.generics.repr(tcx),
+                self.predicates.repr(tcx),
                 self.fty.repr(tcx),
                 self.explicit_self.repr(tcx),
                 self.vis.repr(tcx),
@@ -966,19 +1102,19 @@ impl<'tcx> Repr<'tcx> for ty::Method<'tcx> {
 
 impl<'tcx> Repr<'tcx> for ast::Name {
     fn repr(&self, _tcx: &ctxt) -> String {
-        token::get_name(*self).get().to_string()
+        token::get_name(*self).to_string()
     }
 }
 
 impl<'tcx> UserString<'tcx> for ast::Name {
     fn user_string(&self, _tcx: &ctxt) -> String {
-        token::get_name(*self).get().to_string()
+        token::get_name(*self).to_string()
     }
 }
 
 impl<'tcx> Repr<'tcx> for ast::Ident {
     fn repr(&self, _tcx: &ctxt) -> String {
-        token::get_ident(*self).get().to_string()
+        token::get_ident(*self).to_string()
     }
 }
 
@@ -1062,7 +1198,7 @@ impl<'tcx> Repr<'tcx> for ty::MethodObject<'tcx> {
         format!("MethodObject({},{},{})",
                 self.trait_ref.repr(tcx),
                 self.method_num,
-                self.real_index)
+                self.vtable_index)
     }
 }
 
@@ -1103,30 +1239,28 @@ impl<'tcx> UserString<'tcx> for ty::ParamBounds<'tcx> {
         if !s.is_empty() {
             result.push(s);
         }
-        for n in self.trait_bounds.iter() {
+        for n in &self.trait_bounds {
             result.push(n.user_string(tcx));
         }
         result.connect(" + ")
     }
 }
 
-impl<'tcx> UserString<'tcx> for ty::ExistentialBounds<'tcx> {
-    fn user_string(&self, tcx: &ctxt<'tcx>) -> String {
-        if self.builtin_bounds.contains(&ty::BoundSend) &&
-            self.region_bound == ty::ReStatic
-        { // Region bound is implied by builtin bounds:
-            return self.builtin_bounds.repr(tcx);
-        }
-
+impl<'tcx> Repr<'tcx> for ty::ExistentialBounds<'tcx> {
+    fn repr(&self, tcx: &ctxt<'tcx>) -> String {
         let mut res = Vec::new();
 
-        let region_str = self.region_bound.user_string(tcx);
+        let region_str = self.region_bound.repr(tcx);
         if !region_str.is_empty() {
             res.push(region_str);
         }
 
-        for bound in self.builtin_bounds.iter() {
-            res.push(bound.user_string(tcx));
+        for bound in &self.builtin_bounds {
+            res.push(bound.repr(tcx));
+        }
+
+        for projection_bound in &self.projection_bounds {
+            res.push(projection_bound.repr(tcx));
         }
 
         res.connect("+")
@@ -1168,10 +1302,10 @@ impl<'tcx, T> UserString<'tcx> for ty::Binder<T>
                 }
             })
         });
-        let names: Vec<_> = names.iter().map(|s| s.get()).collect();
+        let names: Vec<_> = names.iter().map(|s| &s[..]).collect();
 
         let value_str = unbound_value.user_string(tcx);
-        if names.len() == 0 {
+        if names.is_empty() {
             value_str
         } else {
             format!("for<{}> {}", names.connect(","), value_str)
@@ -1182,9 +1316,8 @@ impl<'tcx, T> UserString<'tcx> for ty::Binder<T>
 impl<'tcx> UserString<'tcx> for ty::TraitRef<'tcx> {
     fn user_string(&self, tcx: &ctxt<'tcx>) -> String {
         let path_str = ty::item_path_str(tcx, self.def_id);
-        let trait_def = ty::lookup_trait_def(tcx, self.def_id);
-        parameterized(tcx, path_str.as_slice(), self.substs,
-                      &trait_def.generics, self.def_id)
+        parameterized(tcx, &path_str, self.substs, self.def_id, &[],
+                      || ty::lookup_trait_def(tcx, self.def_id).generics.clone())
     }
 }
 
@@ -1196,7 +1329,7 @@ impl<'tcx> UserString<'tcx> for Ty<'tcx> {
 
 impl<'tcx> UserString<'tcx> for ast::Ident {
     fn user_string(&self, _tcx: &ctxt) -> String {
-        token::get_name(self.name).get().to_string()
+        token::get_name(self.name).to_string()
     }
 }
 
@@ -1238,6 +1371,15 @@ impl<'tcx> Repr<'tcx> for ty::UpvarBorrow {
         format!("UpvarBorrow({}, {})",
                 self.kind.repr(tcx),
                 self.region.repr(tcx))
+    }
+}
+
+impl<'tcx> Repr<'tcx> for ty::UpvarCapture {
+    fn repr(&self, tcx: &ctxt) -> String {
+        match *self {
+            ty::UpvarCapture::ByValue => format!("ByValue"),
+            ty::UpvarCapture::ByRef(ref data) => format!("ByRef({})", data.repr(tcx)),
+        }
     }
 }
 
@@ -1322,10 +1464,9 @@ impl<'tcx, T:Repr<'tcx>> Repr<'tcx> for ty::Binder<T> {
 }
 
 impl<'tcx, S, K, V> Repr<'tcx> for HashMap<K, V, S>
-    where K: Hash<<S as HashState>::Hasher> + Eq + Repr<'tcx>,
+    where K: Hash + Eq + Repr<'tcx>,
           V: Repr<'tcx>,
           S: HashState,
-          <S as HashState>::Hasher: Hasher<Output=u64>,
 {
     fn repr(&self, tcx: &ctxt<'tcx>) -> String {
         format!("HashMap({})",
@@ -1399,8 +1540,7 @@ impl<'tcx> UserString<'tcx> for ty::ProjectionPredicate<'tcx> {
 
 impl<'tcx> Repr<'tcx> for ty::ProjectionTy<'tcx> {
     fn repr(&self, tcx: &ctxt<'tcx>) -> String {
-        format!("<{} as {}>::{}",
-                self.trait_ref.substs.self_ty().repr(tcx),
+        format!("{}::{}",
                 self.trait_ref.repr(tcx),
                 self.item_name.repr(tcx))
     }
@@ -1424,5 +1564,11 @@ impl<'tcx> UserString<'tcx> for ty::Predicate<'tcx> {
             ty::Predicate::TypeOutlives(ref predicate) => predicate.user_string(tcx),
             ty::Predicate::Projection(ref predicate) => predicate.user_string(tcx),
         }
+    }
+}
+
+impl<'tcx> Repr<'tcx> for ast::Unsafety {
+    fn repr(&self, _: &ctxt<'tcx>) -> String {
+        format!("{:?}", *self)
     }
 }

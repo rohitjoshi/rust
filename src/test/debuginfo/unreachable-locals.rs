@@ -8,7 +8,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// ignore-android: FIXME(#10381)
 // min-lldb-version: 310
 
 // compile-flags:-g
@@ -26,7 +25,23 @@ fn after_return() {
     match (20i32, 'c') {
         (a, ref b) => {}
     }
-    for a in [111i32].iter() {}
+    for a in &[111i32] {}
+    let test = if some_predicate() { 1 } else { 2 };
+    while some_predicate() {
+        let abc = !some_predicate();
+    }
+    loop {
+        let abc = !some_predicate();
+        break;
+    }
+    // nested block
+    {
+        let abc = !some_predicate();
+
+        {
+            let def = !some_predicate();
+        }
+    }
 }
 
 fn after_panic() {
@@ -36,7 +51,23 @@ fn after_panic() {
     match (20i32, 'c') {
         (a, ref b) => {}
     }
-    for a in [111i32].iter() {}
+    for a in &[111i32] {}
+    let test = if some_predicate() { 1 } else { 2 };
+    while some_predicate() {
+        let abc = !some_predicate();
+    }
+    loop {
+        let abc = !some_predicate();
+        break;
+    }
+    // nested block
+    {
+        let abc = !some_predicate();
+
+        {
+            let def = !some_predicate();
+        }
+    }
 }
 
 fn after_diverging_function() {
@@ -46,7 +77,23 @@ fn after_diverging_function() {
     match (20i32, 'c') {
         (a, ref b) => {}
     }
-    for a in [111i32].iter() {}
+    for a in &[111i32] {}
+    let test = if some_predicate() { 1 } else { 2 };
+    while some_predicate() {
+        let abc = !some_predicate();
+    }
+    loop {
+        let abc = !some_predicate();
+        break;
+    }
+    // nested block
+    {
+        let abc = !some_predicate();
+
+        {
+            let def = !some_predicate();
+        }
+    }
 }
 
 fn after_break() {
@@ -57,19 +104,51 @@ fn after_break() {
         match (20i32, 'c') {
             (a, ref b) => {}
         }
-        for a in [111i32].iter() {}
+        for a in &[111i32] {}
+        let test = if some_predicate() { 1 } else { 2 };
+        while some_predicate() {
+            let abc = !some_predicate();
+        }
+        loop {
+            let abc = !some_predicate();
+            break;
+        }
+        // nested block
+        {
+            let abc = !some_predicate();
+
+            {
+                let def = !some_predicate();
+            }
+        }
     }
 }
 
 fn after_continue() {
-    for _ in range(0, 10i32) {
-        break;
+    for _ in 0..10i32 {
+        continue;
         let x = "0";
         let (ref y,z) = (1i32, 2u32);
         match (20i32, 'c') {
             (a, ref b) => {}
         }
-        for a in [111i32].iter() {}
+        for a in &[111i32] {}
+        let test = if some_predicate() { 1 } else { 2 };
+        while some_predicate() {
+            let abc = !some_predicate();
+        }
+        loop {
+            let abc = !some_predicate();
+            break;
+        }
+        // nested block
+        {
+            let abc = !some_predicate();
+
+            {
+                let def = !some_predicate();
+            }
+        }
     }
 }
 
@@ -84,3 +163,6 @@ fn main() {
 fn diverge() -> ! {
     panic!();
 }
+
+fn some_predicate() -> bool { true || false }
+

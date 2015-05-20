@@ -12,6 +12,6 @@
 #![feature(box_syntax)]
 
 pub fn main() {
-    let i = box 100i;
+    let i: Box<_> = box 100;
     println!("{}", i);
 }

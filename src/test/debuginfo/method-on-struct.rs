@@ -8,7 +8,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// ignore-android: FIXME(#10381)
 // min-lldb-version: 310
 
 // compile-flags:-g
@@ -116,23 +115,24 @@
 #![feature(box_syntax)]
 #![omit_gdb_pretty_printer_section]
 
+#[derive(Copy, Clone)]
 struct Struct {
-    x: int
+    x: isize
 }
 
 impl Struct {
 
-    fn self_by_ref(&self, arg1: int, arg2: int) -> int {
+    fn self_by_ref(&self, arg1: isize, arg2: isize) -> isize {
         zzz(); // #break
         self.x + arg1 + arg2
     }
 
-    fn self_by_val(self, arg1: int, arg2: int) -> int {
+    fn self_by_val(self, arg1: isize, arg2: isize) -> isize {
         zzz(); // #break
         self.x + arg1 + arg2
     }
 
-    fn self_owned(self: Box<Struct>, arg1: int, arg2: int) -> int {
+    fn self_owned(self: Box<Struct>, arg1: isize, arg2: isize) -> isize {
         zzz(); // #break
         self.x + arg1 + arg2
     }
@@ -143,13 +143,10 @@ fn main() {
     let _ = stack.self_by_ref(-1, -2);
     let _ = stack.self_by_val(-3, -4);
 
-    let owned = box Struct { x: 200 };
+    let owned: Box<_> = box Struct { x: 200 };
     let _ = owned.self_by_ref(-5, -6);
     let _ = owned.self_by_val(-7, -8);
     let _ = owned.self_owned(-9, -10);
 }
 
 fn zzz() {()}
-
-impl Copy for Struct {}
-

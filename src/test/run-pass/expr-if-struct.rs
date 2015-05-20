@@ -14,23 +14,20 @@
 
 // Tests for if as expressions returning nominal types
 
-struct I { i: int }
-
-impl Copy for I {}
+#[derive(Copy, Clone)]
+struct I { i: isize }
 
 fn test_rec() {
     let rs = if true { I {i: 100} } else { I {i: 101} };
     assert_eq!(rs.i, 100);
 }
 
-#[derive(Show)]
+#[derive(Copy, Clone, Debug)]
 enum mood { happy, sad, }
-
-impl Copy for mood {}
 
 impl PartialEq for mood {
     fn eq(&self, other: &mood) -> bool {
-        ((*self) as uint) == ((*other) as uint)
+        ((*self) as usize) == ((*other) as usize)
     }
     fn ne(&self, other: &mood) -> bool { !(*self).eq(other) }
 }

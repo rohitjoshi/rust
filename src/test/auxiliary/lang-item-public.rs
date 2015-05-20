@@ -8,14 +8,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#![feature(no_std)]
 #![no_std]
 #![feature(lang_items)]
 
 #[lang="sized"]
-pub trait Sized {}
+pub trait Sized { }
 
 #[lang="panic"]
-fn panic(_: &(&'static str, &'static str, uint)) -> ! { loop {} }
+fn panic(_: &(&'static str, &'static str, usize)) -> ! { loop {} }
 
 #[lang = "stack_exhausted"]
 extern fn stack_exhausted() {}
@@ -24,6 +25,25 @@ extern fn stack_exhausted() {}
 extern fn eh_personality() {}
 
 #[lang="copy"]
-pub trait Copy {}
+pub trait Copy {
+    // Empty.
+}
 
+#[lang="rem"]
+pub trait Rem<RHS=Self> {
+    type Output = Self;
+    fn rem(self, rhs: RHS) -> Self::Output;
+}
 
+impl Rem for isize {
+    type Output = isize;
+
+    #[inline]
+    fn rem(self, other: isize) -> isize {
+        // if you use `self % other` here, as one would expect, you
+        // get back an error because of potential failure/overflow,
+        // which tries to invoke error fns that don't have the
+        // appropriate signatures anymore. So...just return 0.
+        0
+    }
+}

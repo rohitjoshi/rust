@@ -8,7 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-trait Foo<T> {}
+// pretty-expanded FIXME #23616
+
+trait Foo<T> { fn dummy(&self, arg: T) { } }
 
 trait Bar<A> {
     fn method<B>(&self) where A: Foo<B>;
@@ -19,7 +21,7 @@ struct X;
 
 impl Foo<S> for X {}
 
-impl Bar<X> for int {
+impl Bar<X> for i32 {
     fn method<U>(&self) where X: Foo<U> {
     }
 }
@@ -27,4 +29,3 @@ impl Bar<X> for int {
 fn main() {
     1.method::<S>();
 }
-

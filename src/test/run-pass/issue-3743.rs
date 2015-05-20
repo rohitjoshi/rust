@@ -10,16 +10,14 @@
 
 // If `Mul` used an associated type for its output, this test would
 // work more smoothly.
-#![feature(old_orphan_check)]
 
 use std::ops::Mul;
 
+#[derive(Copy, Clone)]
 struct Vec2 {
     x: f64,
     y: f64
 }
-
-impl Copy for Vec2 {}
 
 // methods we want to export as methods as well as operators
 impl Vec2 {

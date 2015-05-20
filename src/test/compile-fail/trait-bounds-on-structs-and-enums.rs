@@ -51,17 +51,16 @@ enum MoreBadness<V> {
     EvenMoreBadness(Bar<V>),
 }
 
-trait PolyTrait<T> {
-    fn whatever() {}
+trait PolyTrait<T>
+{
+    fn whatever(&self, t: T) {}
 }
 
 struct Struct;
 
 impl PolyTrait<Foo<usize>> for Struct {
 //~^ ERROR not implemented
-    fn whatever() {}
 }
 
 fn main() {
 }
-

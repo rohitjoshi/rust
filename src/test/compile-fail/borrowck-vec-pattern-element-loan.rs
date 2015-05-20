@@ -9,10 +9,11 @@
 // except according to those terms.
 
 #![feature(advanced_slice_patterns)]
+#![feature(slice_patterns)]
 
 fn a<'a>() -> &'a [isize] {
     let vec = vec!(1, 2, 3, 4);
-    let vec: &[isize] = vec.as_slice(); //~ ERROR does not live long enough
+    let vec: &[isize] = &vec; //~ ERROR does not live long enough
     let tail = match vec {
         [_, tail..] => tail,
         _ => panic!("a")
@@ -22,7 +23,7 @@ fn a<'a>() -> &'a [isize] {
 
 fn b<'a>() -> &'a [isize] {
     let vec = vec!(1, 2, 3, 4);
-    let vec: &[isize] = vec.as_slice(); //~ ERROR does not live long enough
+    let vec: &[isize] = &vec; //~ ERROR does not live long enough
     let init = match vec {
         [init.., _] => init,
         _ => panic!("b")
@@ -32,7 +33,7 @@ fn b<'a>() -> &'a [isize] {
 
 fn c<'a>() -> &'a [isize] {
     let vec = vec!(1, 2, 3, 4);
-    let vec: &[isize] = vec.as_slice(); //~ ERROR does not live long enough
+    let vec: &[isize] = &vec; //~ ERROR does not live long enough
     let slice = match vec {
         [_, slice.., _] => slice,
         _ => panic!("c")

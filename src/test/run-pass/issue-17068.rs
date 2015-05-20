@@ -10,8 +10,9 @@
 
 // Test that regionck creates the right region links in the pattern
 // binding of a for loop
-fn foo<'a>(v: &'a [uint]) -> &'a uint {
-    for &ref x in v.iter() { return x; }
+
+fn foo<'a>(v: &'a [usize]) -> &'a usize {
+    for &ref x in v { return x; }
     unreachable!()
 }
 

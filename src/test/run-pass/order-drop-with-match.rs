@@ -14,8 +14,9 @@
 // in ORDER matching up to when it ran.
 // Correct order is: matched, inner, outer
 
-static mut ORDER: [uint; 3] = [0, 0, 0];
-static mut INDEX: uint = 0;
+
+static mut ORDER: [usize; 3] = [0, 0, 0];
+static mut INDEX: usize = 0;
 
 struct A;
 impl Drop for A {
@@ -60,6 +61,6 @@ fn main() {
     }
     unsafe {
         let expected: &[_] = &[1, 2, 3];
-        assert_eq!(expected, ORDER.as_slice());
+        assert_eq!(expected, ORDER);
     }
 }

@@ -15,13 +15,12 @@
 
 use std::cell::Cell;
 
-fn test1() { let val = &0i; { } *val; }
+fn test1() { let val = &0; { } *val; }
 
-fn test2() -> int { let val = &0i; { } *val }
+fn test2() -> isize { let val = &0; { } *val }
 
-struct S { eax: int }
-
-impl Copy for S {}
+#[derive(Copy, Clone)]
+struct S { eax: isize }
 
 fn test3() {
     let regs = &Cell::new(S {eax: 0});
@@ -31,18 +30,18 @@ fn test3() {
 
 fn test4() -> bool { let regs = &true; if true { } *regs || false }
 
-fn test5() -> (int, int) { { } (0, 1) }
+fn test5() -> (isize, isize) { { } (0, 1) }
 
 fn test6() -> bool { { } (true || false) && true }
 
-fn test7() -> uint {
-    let regs = &0i;
+fn test7() -> usize {
+    let regs = &0;
     match true { true => { } _ => { } }
-    (*regs < 2) as uint
+    (*regs < 2) as usize
 }
 
-fn test8() -> int {
-    let val = &0i;
+fn test8() -> isize {
+    let val = &0;
     match true {
         true => { }
         _    => { }
@@ -55,14 +54,14 @@ fn test8() -> int {
 }
 
 fn test9() {
-    let regs = &Cell::new(0i);
+    let regs = &Cell::new(0);
     match true { true => { } _ => { } } regs.set(regs.get() + 1);
 }
 
-fn test10() -> int {
-    let regs = vec!(0i);
+fn test10() -> isize {
+    let regs = vec!(0);
     match true { true => { } _ => { } }
     regs[0]
 }
 
-fn test11() -> Vec<int> { if true { } vec!(1, 2) }
+fn test11() -> Vec<isize> { if true { } vec!(1, 2) }

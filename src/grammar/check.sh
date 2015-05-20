@@ -1,5 +1,7 @@
 #!/bin/sh
 
+# ignore-license
+
 # Run the reference lexer against libsyntax and compare the tokens and spans.
 # If "// ignore-lexer-test" is present in the file, it will be ignored.
 
@@ -16,13 +18,13 @@ failed=0
 skipped=0
 
 check() {
-    grep --silent "// ignore-lexer-test" $1;
+    grep --silent "// ignore-lexer-test" "$1";
 
     # if it's *not* found...
     if [ $? -eq 1 ]; then
         cd $2 # This `cd` is so java will pick up RustLexer.class. I couldn't
-        # figure out how to wrangle the CLASSPATH, just adding build/grammr didn't
-        # seem to have anny effect.
+        # figure out how to wrangle the CLASSPATH, just adding build/grammar
+        # didn't seem to have any effect.
         if $3 RustLexer tokens -tokens < $1 | $4 $1 $5; then
             echo "pass: $1"
             passed=`expr $passed + 1`
@@ -37,7 +39,7 @@ check() {
 }
 
 for file in $(find $1 -iname '*.rs' ! -path '*/test/compile-fail*'); do
-    check $file $2 $3 $4 $5
+    check "$file" $2 $3 $4 $5
 done
 
 printf "\ntest result: "
@@ -48,4 +50,3 @@ else
     printf "failed. $passed passed; $failed failed; $skipped skipped\n\n"
     exit 1
 fi
-

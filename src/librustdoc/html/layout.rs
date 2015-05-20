@@ -9,7 +9,8 @@
 // except according to those terms.
 
 use std::fmt;
-use std::old_io;
+use std::io::prelude::*;
+use std::io;
 
 use externalfiles::ExternalHtml;
 
@@ -31,8 +32,8 @@ pub struct Page<'a> {
 }
 
 pub fn render<T: fmt::Display, S: fmt::Display>(
-    dst: &mut old_io::Writer, layout: &Layout, page: &Page, sidebar: &S, t: &T)
-    -> old_io::IoResult<()>
+    dst: &mut io::Write, layout: &Layout, page: &Page, sidebar: &S, t: &T)
+    -> io::Result<()>
 {
     write!(dst,
 r##"<!DOCTYPE html>
@@ -110,6 +111,10 @@ r##"<!DOCTYPE html>
                 <code>trait</code>, <code>typedef</code> (or
                 <code>tdef</code>).
             </p>
+            <p>
+                Search functions by type signature (e.g.
+                <code>vec -> usize</code>)
+            </p>
         </div>
     </div>
 
@@ -129,7 +134,7 @@ r##"<!DOCTYPE html>
     content   = *t,
     root_path = page.root_path,
     ty        = page.ty,
-    logo      = if layout.logo.len() == 0 {
+    logo      = if layout.logo.is_empty() {
         "".to_string()
     } else {
         format!("<a href='{}{}/index.html'>\
@@ -140,7 +145,7 @@ r##"<!DOCTYPE html>
     title     = page.title,
     description = page.description,
     keywords = page.keywords,
-    favicon   = if layout.favicon.len() == 0 {
+    favicon   = if layout.favicon.is_empty() {
         "".to_string()
     } else {
         format!(r#"<link rel="shortcut icon" href="{}">"#, layout.favicon)
@@ -151,7 +156,7 @@ r##"<!DOCTYPE html>
     sidebar   = *sidebar,
     krate     = layout.krate,
     play_url  = layout.playground_url,
-    play_js   = if layout.playground_url.len() == 0 {
+    play_js   = if layout.playground_url.is_empty() {
         "".to_string()
     } else {
         format!(r#"<script src="{}playpen.js"></script>"#, page.root_path)
@@ -159,7 +164,7 @@ r##"<!DOCTYPE html>
     )
 }
 
-pub fn redirect(dst: &mut old_io::Writer, url: &str) -> old_io::IoResult<()> {
+pub fn redirect(dst: &mut io::Write, url: &str) -> io::Result<()> {
     // <script> triggers a redirect before refresh, so this is fine.
     write!(dst,
 r##"<!DOCTYPE html>

@@ -33,11 +33,10 @@ fn main() {
                         //~^ HELP maybe a `()` to call it is missing
 
     // Ensure the span is useful
-    let ys = &[1is,2,3,4,5,6,7];
+    let ys = &[1,2,3,4,5,6,7];
     let a = ys.iter()
               .map(|x| x)
               .filter(|&&x| x == 1)
               .filter_map; //~ ERROR attempted to take value of method `filter_map` on type
               //~^ HELP maybe a `()` to call it is missing
 }
-

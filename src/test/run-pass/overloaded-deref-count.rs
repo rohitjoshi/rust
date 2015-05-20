@@ -8,13 +8,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+
 use std::cell::Cell;
 use std::ops::{Deref, DerefMut};
 use std::vec::Vec;
 
 struct DerefCounter<T> {
-    count_imm: Cell<uint>,
-    count_mut: uint,
+    count_imm: Cell<usize>,
+    count_mut: usize,
     value: T
 }
 
@@ -27,7 +28,7 @@ impl<T> DerefCounter<T> {
         }
     }
 
-    fn counts(&self) -> (uint, uint) {
+    fn counts(&self) -> (usize, usize) {
         (self.count_imm.get(), self.count_mut)
     }
 }
@@ -49,7 +50,7 @@ impl<T> DerefMut for DerefCounter<T> {
 }
 
 pub fn main() {
-    let mut n = DerefCounter::new(0i);
+    let mut n = DerefCounter::new(0);
     let mut v = DerefCounter::new(Vec::new());
 
     let _ = *n; // Immutable deref + copy a POD.
@@ -62,7 +63,7 @@ pub fn main() {
     assert_eq!(n.counts(), (2, 1)); assert_eq!(v.counts(), (1, 1));
 
     let mut v2 = Vec::new();
-    v2.push(1i);
+    v2.push(1);
 
     *n = 5; *v = v2; // Mutable deref + assignment.
     assert_eq!(n.counts(), (2, 2)); assert_eq!(v.counts(), (1, 2));
@@ -82,5 +83,5 @@ pub fn main() {
     // Check the final states.
     assert_eq!(*n, 2);
     let expected: &[_] = &[1, 2];
-    assert_eq!((*v).as_slice(), expected);
+    assert_eq!((*v), expected);
 }

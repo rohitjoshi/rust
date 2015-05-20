@@ -10,17 +10,19 @@
 
 // Make sure #1399 stays fixed
 
+
 #![allow(unknown_features)]
 #![feature(box_syntax)]
-#![feature(unboxed_closures)]
+#![feature(unboxed_closures, core)]
 
-struct A { a: Box<int> }
+struct A { a: Box<isize> }
 
-fn foo() -> Box<FnMut() -> int + 'static> {
-    let k = box 22i;
+fn foo() -> Box<FnMut() -> isize + 'static> {
+    let k: Box<_> = box 22;
     let _u = A {a: k.clone()};
-    let result  = |&mut:| 22;
-    box result
+    let result  = || 22;
+    // FIXME (#22405): Replace `Box::new` with `box` here when/if possible.
+    Box::new(result)
 }
 
 pub fn main() {

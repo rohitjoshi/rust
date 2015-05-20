@@ -8,7 +8,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use core::ptr::PtrExt;
+use core::{isize, usize};
+
+#[inline(always)]
+fn check_size_and_alignment(size: usize, align: usize) {
+    debug_assert!(size != 0);
+    debug_assert!(size <= isize::MAX as usize, "Tried to allocate too much: {} bytes", size);
+    debug_assert!(usize::is_power_of_two(align), "Invalid alignment of allocation: {}", align);
+}
 
 // FIXME: #13996: mark the `allocate` and `reallocate` return value as `noalias`
 
@@ -20,13 +27,17 @@ use core::ptr::PtrExt;
 /// power of 2. The alignment must be no larger than the largest supported page
 /// size on the platform.
 #[inline]
-pub unsafe fn allocate(size: uint, align: uint) -> *mut u8 {
+pub unsafe fn allocate(size: usize, align: usize) -> *mut u8 {
+    check_size_and_alignment(size, align);
     imp::allocate(size, align)
 }
 
 /// Resize the allocation referenced by `ptr` to `size` bytes.
 ///
 /// On failure, return a null pointer and leave the original allocation intact.
+///
+/// If the allocation was relocated, the memory at the passed-in pointer is
+/// undefined after the call.
 ///
 /// Behavior is undefined if the requested size is 0 or the alignment is not a
 /// power of 2. The alignment must be no larger than the largest supported page
@@ -36,7 +47,8 @@ pub unsafe fn allocate(size: uint, align: uint) -> *mut u8 {
 /// create the allocation referenced by `ptr`. The `old_size` parameter may be
 /// any value in range_inclusive(requested_size, usable_size).
 #[inline]
-pub unsafe fn reallocate(ptr: *mut u8, old_size: uint, size: uint, align: uint) -> *mut u8 {
+pub unsafe fn reallocate(ptr: *mut u8, old_size: usize, size: usize, align: usize) -> *mut u8 {
+    check_size_and_alignment(size, align);
     imp::reallocate(ptr, old_size, size, align)
 }
 
@@ -53,7 +65,9 @@ pub unsafe fn reallocate(ptr: *mut u8, old_size: uint, size: uint, align: uint) 
 /// create the allocation referenced by `ptr`. The `old_size` parameter may be
 /// any value in range_inclusive(requested_size, usable_size).
 #[inline]
-pub unsafe fn reallocate_inplace(ptr: *mut u8, old_size: uint, size: uint, align: uint) -> uint {
+pub unsafe fn reallocate_inplace(ptr: *mut u8, old_size: usize, size: usize,
+                                 align: usize) -> usize {
+    check_size_and_alignment(size, align);
     imp::reallocate_inplace(ptr, old_size, size, align)
 }
 
@@ -65,14 +79,14 @@ pub unsafe fn reallocate_inplace(ptr: *mut u8, old_size: uint, size: uint, align
 /// create the allocation referenced by `ptr`. The `old_size` parameter may be
 /// any value in range_inclusive(requested_size, usable_size).
 #[inline]
-pub unsafe fn deallocate(ptr: *mut u8, old_size: uint, align: uint) {
+pub unsafe fn deallocate(ptr: *mut u8, old_size: usize, align: usize) {
     imp::deallocate(ptr, old_size, align)
 }
 
 /// Returns the usable size of an allocation created with the specified the
 /// `size` and `align`.
 #[inline]
-pub fn usable_size(size: uint, align: uint) -> uint {
+pub fn usable_size(size: usize, align: usize) -> usize {
     imp::usable_size(size, align)
 }
 
@@ -80,7 +94,7 @@ pub fn usable_size(size: uint, align: uint) -> uint {
 ///
 /// These statistics may be inconsistent if other threads use the allocator
 /// during the call.
-#[unstable]
+#[unstable(feature = "alloc")]
 pub fn stats_print() {
     imp::stats_print();
 }
@@ -93,9 +107,9 @@ pub const EMPTY: *mut () = 0x1 as *mut ();
 
 /// The allocator for unique pointers.
 #[cfg(not(test))]
-#[lang="exchange_malloc"]
+#[lang = "exchange_malloc"]
 #[inline]
-unsafe fn exchange_malloc(size: uint, align: uint) -> *mut u8 {
+unsafe fn exchange_malloc(size: usize, align: usize) -> *mut u8 {
     if size == 0 {
         EMPTY as *mut u8
     } else {
@@ -106,9 +120,9 @@ unsafe fn exchange_malloc(size: uint, align: uint) -> *mut u8 {
 }
 
 #[cfg(not(test))]
-#[lang="exchange_free"]
+#[lang = "exchange_free"]
 #[inline]
-unsafe fn exchange_free(ptr: *mut u8, old_size: uint, align: uint) {
+unsafe fn exchange_free(ptr: *mut u8, old_size: usize, align: usize) {
     deallocate(ptr, old_size, align);
 }
 
@@ -121,49 +135,50 @@ unsafe fn exchange_free(ptr: *mut u8, old_size: uint, align: uint) {
               target_arch = "mips",
               target_arch = "mipsel",
               target_arch = "powerpc")))]
-const MIN_ALIGN: uint = 8;
+const MIN_ALIGN: usize = 8;
 #[cfg(all(not(feature = "external_funcs"),
           not(feature = "external_crate"),
           any(target_arch = "x86",
               target_arch = "x86_64",
               target_arch = "aarch64")))]
-const MIN_ALIGN: uint = 16;
+const MIN_ALIGN: usize = 16;
 
 #[cfg(feature = "external_funcs")]
 mod imp {
+    #[allow(improper_ctypes)]
     extern {
-        fn rust_allocate(size: uint, align: uint) -> *mut u8;
-        fn rust_deallocate(ptr: *mut u8, old_size: uint, align: uint);
-        fn rust_reallocate(ptr: *mut u8, old_size: uint, size: uint, align: uint) -> *mut u8;
-        fn rust_reallocate_inplace(ptr: *mut u8, old_size: uint, size: uint,
-                                   align: uint) -> uint;
-        fn rust_usable_size(size: uint, align: uint) -> uint;
+        fn rust_allocate(size: usize, align: usize) -> *mut u8;
+        fn rust_deallocate(ptr: *mut u8, old_size: usize, align: usize);
+        fn rust_reallocate(ptr: *mut u8, old_size: usize, size: usize, align: usize) -> *mut u8;
+        fn rust_reallocate_inplace(ptr: *mut u8, old_size: usize, size: usize,
+                                   align: usize) -> usize;
+        fn rust_usable_size(size: usize, align: usize) -> usize;
         fn rust_stats_print();
     }
 
     #[inline]
-    pub unsafe fn allocate(size: uint, align: uint) -> *mut u8 {
+    pub unsafe fn allocate(size: usize, align: usize) -> *mut u8 {
         rust_allocate(size, align)
     }
 
     #[inline]
-    pub unsafe fn deallocate(ptr: *mut u8, old_size: uint, align: uint) {
+    pub unsafe fn deallocate(ptr: *mut u8, old_size: usize, align: usize) {
         rust_deallocate(ptr, old_size, align)
     }
 
     #[inline]
-    pub unsafe fn reallocate(ptr: *mut u8, old_size: uint, size: uint, align: uint) -> *mut u8 {
+    pub unsafe fn reallocate(ptr: *mut u8, old_size: usize, size: usize, align: usize) -> *mut u8 {
         rust_reallocate(ptr, old_size, size, align)
     }
 
     #[inline]
-    pub unsafe fn reallocate_inplace(ptr: *mut u8, old_size: uint, size: uint,
-                                     align: uint) -> uint {
+    pub unsafe fn reallocate_inplace(ptr: *mut u8, old_size: usize, size: usize,
+                                     align: usize) -> usize {
         rust_reallocate_inplace(ptr, old_size, size, align)
     }
 
     #[inline]
-    pub fn usable_size(size: uint, align: uint) -> uint {
+    pub fn usable_size(size: usize, align: usize) -> usize {
         unsafe { rust_usable_size(size, align) }
     }
 
@@ -187,7 +202,6 @@ mod imp {
     use core::option::Option;
     use core::option::Option::None;
     use core::ptr::{null_mut, null};
-    use core::num::Int;
     use libc::{c_char, c_int, c_void, size_t};
     use super::MIN_ALIGN;
 
@@ -196,6 +210,7 @@ mod imp {
     extern {}
 
     extern {
+        #[allocator]
         fn je_mallocx(size: size_t, flags: c_int) -> *mut c_void;
         fn je_rallocx(ptr: *mut c_void, size: size_t, flags: c_int) -> *mut c_void;
         fn je_xallocx(ptr: *mut c_void, size: size_t, extra: size_t, flags: c_int) -> size_t;
@@ -208,48 +223,50 @@ mod imp {
     }
 
     // -lpthread needs to occur after -ljemalloc, the earlier argument isn't enough
-    #[cfg(all(not(windows), not(target_os = "android")))]
+    #[cfg(all(not(windows),
+              not(target_os = "android"),
+              not(target_env = "musl")))]
     #[link(name = "pthread")]
     extern {}
 
     // MALLOCX_ALIGN(a) macro
     #[inline(always)]
-    fn mallocx_align(a: uint) -> c_int { a.trailing_zeros() as c_int }
+    fn mallocx_align(a: usize) -> c_int { a.trailing_zeros() as c_int }
 
     #[inline(always)]
-    fn align_to_flags(align: uint) -> c_int {
+    fn align_to_flags(align: usize) -> c_int {
         if align <= MIN_ALIGN { 0 } else { mallocx_align(align) }
     }
 
     #[inline]
-    pub unsafe fn allocate(size: uint, align: uint) -> *mut u8 {
+    pub unsafe fn allocate(size: usize, align: usize) -> *mut u8 {
         let flags = align_to_flags(align);
         je_mallocx(size as size_t, flags) as *mut u8
     }
 
     #[inline]
-    pub unsafe fn reallocate(ptr: *mut u8, _old_size: uint, size: uint, align: uint) -> *mut u8 {
+    pub unsafe fn reallocate(ptr: *mut u8, _old_size: usize, size: usize, align: usize) -> *mut u8 {
         let flags = align_to_flags(align);
         je_rallocx(ptr as *mut c_void, size as size_t, flags) as *mut u8
     }
 
     #[inline]
-    pub unsafe fn reallocate_inplace(ptr: *mut u8, _old_size: uint, size: uint,
-                                     align: uint) -> uint {
+    pub unsafe fn reallocate_inplace(ptr: *mut u8, _old_size: usize, size: usize,
+                                     align: usize) -> usize {
         let flags = align_to_flags(align);
-        je_xallocx(ptr as *mut c_void, size as size_t, 0, flags) as uint
+        je_xallocx(ptr as *mut c_void, size as size_t, 0, flags) as usize
     }
 
     #[inline]
-    pub unsafe fn deallocate(ptr: *mut u8, old_size: uint, align: uint) {
+    pub unsafe fn deallocate(ptr: *mut u8, old_size: usize, align: usize) {
         let flags = align_to_flags(align);
         je_sdallocx(ptr as *mut c_void, old_size as size_t, flags)
     }
 
     #[inline]
-    pub fn usable_size(size: uint, align: uint) -> uint {
+    pub fn usable_size(size: usize, align: usize) -> usize {
         let flags = align_to_flags(align);
-        unsafe { je_nallocx(size as size_t, flags) as uint }
+        unsafe { je_nallocx(size as size_t, flags) as usize }
     }
 
     pub fn stats_print() {
@@ -276,7 +293,7 @@ mod imp {
     }
 
     #[inline]
-    pub unsafe fn allocate(size: uint, align: uint) -> *mut u8 {
+    pub unsafe fn allocate(size: usize, align: usize) -> *mut u8 {
         if align <= MIN_ALIGN {
             libc::malloc(size as libc::size_t) as *mut u8
         } else {
@@ -293,30 +310,30 @@ mod imp {
     }
 
     #[inline]
-    pub unsafe fn reallocate(ptr: *mut u8, old_size: uint, size: uint, align: uint) -> *mut u8 {
+    pub unsafe fn reallocate(ptr: *mut u8, old_size: usize, size: usize, align: usize) -> *mut u8 {
         if align <= MIN_ALIGN {
             libc::realloc(ptr as *mut libc::c_void, size as libc::size_t) as *mut u8
         } else {
             let new_ptr = allocate(size, align);
-            ptr::copy_memory(new_ptr, ptr, cmp::min(size, old_size));
+            ptr::copy(ptr, new_ptr, cmp::min(size, old_size));
             deallocate(ptr, old_size, align);
             new_ptr
         }
     }
 
     #[inline]
-    pub unsafe fn reallocate_inplace(_ptr: *mut u8, old_size: uint, _size: uint,
-                                     _align: uint) -> uint {
+    pub unsafe fn reallocate_inplace(_ptr: *mut u8, old_size: usize, _size: usize,
+                                     _align: usize) -> usize {
         old_size
     }
 
     #[inline]
-    pub unsafe fn deallocate(ptr: *mut u8, _old_size: uint, _align: uint) {
+    pub unsafe fn deallocate(ptr: *mut u8, _old_size: usize, _align: usize) {
         libc::free(ptr as *mut libc::c_void)
     }
 
     #[inline]
-    pub fn usable_size(size: uint, _align: uint) -> uint {
+    pub fn usable_size(size: usize, _align: usize) -> usize {
         size
     }
 
@@ -340,7 +357,7 @@ mod imp {
     }
 
     #[inline]
-    pub unsafe fn allocate(size: uint, align: uint) -> *mut u8 {
+    pub unsafe fn allocate(size: usize, align: usize) -> *mut u8 {
         if align <= MIN_ALIGN {
             libc::malloc(size as size_t) as *mut u8
         } else {
@@ -349,7 +366,7 @@ mod imp {
     }
 
     #[inline]
-    pub unsafe fn reallocate(ptr: *mut u8, _old_size: uint, size: uint, align: uint) -> *mut u8 {
+    pub unsafe fn reallocate(ptr: *mut u8, _old_size: usize, size: usize, align: usize) -> *mut u8 {
         if align <= MIN_ALIGN {
             libc::realloc(ptr as *mut c_void, size as size_t) as *mut u8
         } else {
@@ -358,13 +375,13 @@ mod imp {
     }
 
     #[inline]
-    pub unsafe fn reallocate_inplace(_ptr: *mut u8, old_size: uint, _size: uint,
-                                     _align: uint) -> uint {
+    pub unsafe fn reallocate_inplace(_ptr: *mut u8, old_size: usize, _size: usize,
+                                     _align: usize) -> usize {
         old_size
     }
 
     #[inline]
-    pub unsafe fn deallocate(ptr: *mut u8, _old_size: uint, align: uint) {
+    pub unsafe fn deallocate(ptr: *mut u8, _old_size: usize, align: usize) {
         if align <= MIN_ALIGN {
             libc::free(ptr as *mut libc::c_void)
         } else {
@@ -373,7 +390,7 @@ mod imp {
     }
 
     #[inline]
-    pub fn usable_size(size: uint, _align: uint) -> uint {
+    pub fn usable_size(size: usize, _align: usize) -> usize {
         size
     }
 
@@ -381,10 +398,10 @@ mod imp {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     extern crate test;
     use self::test::Bencher;
-    use core::ptr::PtrExt;
+    use boxed::Box;
     use heap;
 
     #[test]
@@ -402,7 +419,7 @@ mod test {
     #[bench]
     fn alloc_owned_small(b: &mut Bencher) {
         b.iter(|| {
-            box 10i
+            let _: Box<_> = box 10;
         })
     }
 }

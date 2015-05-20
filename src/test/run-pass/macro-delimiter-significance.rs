@@ -8,7 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-fn main() {
-    vec![1u, 2, 3].len();
-}
+// pretty-expanded FIXME #23616
 
+fn main() {
+    vec![1_usize, 2, 3].len();
+}

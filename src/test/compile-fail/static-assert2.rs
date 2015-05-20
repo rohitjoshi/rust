@@ -8,9 +8,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#![feature(static_assert)]
 #![allow(dead_code)]
 
 #[static_assert]
-static E: bool = 1is == 2; //~ ERROR static assertion failed
+static E: bool = 1 == 2; //~ ERROR static assertion failed
 
 fn main() {}

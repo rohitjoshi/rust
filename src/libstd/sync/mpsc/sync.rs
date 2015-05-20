@@ -19,7 +19,7 @@
 /// which means that every successful send is paired with a successful recv.
 ///
 /// This flavor of channels defines a new `send_opt` method for channels which
-/// is the method by which a message is sent but the task does not panic if it
+/// is the method by which a message is sent but the thread does not panic if it
 /// cannot be delivered.
 ///
 /// Another major difference is that send() will *always* return back the data
@@ -55,19 +55,19 @@ pub struct Packet<T> {
     lock: Mutex<State<T>>,
 }
 
-unsafe impl<T:Send> Send for Packet<T> { }
+unsafe impl<T: Send> Send for Packet<T> { }
 
-unsafe impl<T:Send> Sync for Packet<T> { }
+unsafe impl<T: Send> Sync for Packet<T> { }
 
 struct State<T> {
     disconnected: bool, // Is the channel disconnected yet?
     queue: Queue,       // queue of senders waiting to send data
-    blocker: Blocker,   // currently blocked task on this channel
+    blocker: Blocker,   // currently blocked thread on this channel
     buf: Buffer<T>,     // storage for buffered messages
-    cap: uint,          // capacity of this channel
+    cap: usize,         // capacity of this channel
 
     /// A curious flag used to indicate whether a sender failed or succeeded in
-    /// blocking. This is used to transmit information back to the task that it
+    /// blocking. This is used to transmit information back to the thread that it
     /// must dequeue its message from the buffer because it was not received.
     /// This is only relevant in the 0-buffer case. This obviously cannot be
     /// safely constructed, but it's guaranteed to always have a valid pointer
@@ -84,7 +84,7 @@ enum Blocker {
     NoneBlocked
 }
 
-/// Simple queue for threading tasks together. Nodes are stack-allocated, so
+/// Simple queue for threading threads together. Nodes are stack-allocated, so
 /// this structure is not safe at all
 struct Queue {
     head: *mut Node,
@@ -101,11 +101,11 @@ unsafe impl Send for Node {}
 /// A simple ring-buffer
 struct Buffer<T> {
     buf: Vec<Option<T>>,
-    start: uint,
-    size: uint,
+    start: usize,
+    size: usize,
 }
 
-#[derive(Show)]
+#[derive(Debug)]
 pub enum Failure {
     Empty,
     Disconnected,
@@ -113,10 +113,10 @@ pub enum Failure {
 
 /// Atomically blocks the current thread, placing it into `slot`, unlocking `lock`
 /// in the meantime. This re-locks the mutex upon returning.
-fn wait<'a, 'b, T: Send>(lock: &'a Mutex<State<T>>,
-                         mut guard: MutexGuard<'b, State<T>>,
-                         f: fn(SignalToken) -> Blocker)
-                         -> MutexGuard<'a, State<T>>
+fn wait<'a, 'b, T>(lock: &'a Mutex<State<T>>,
+                   mut guard: MutexGuard<'b, State<T>>,
+                   f: fn(SignalToken) -> Blocker)
+                   -> MutexGuard<'a, State<T>>
 {
     let (wait_token, signal_token) = blocking::tokens();
     match mem::replace(&mut guard.blocker, f(signal_token)) {
@@ -130,14 +130,14 @@ fn wait<'a, 'b, T: Send>(lock: &'a Mutex<State<T>>,
 
 /// Wakes up a thread, dropping the lock at the correct time
 fn wakeup<T>(token: SignalToken, guard: MutexGuard<State<T>>) {
-    // We need to be careful to wake up the waiting task *outside* of the mutex
+    // We need to be careful to wake up the waiting thread *outside* of the mutex
     // in case it incurs a context switch.
     drop(guard);
     token.signal();
 }
 
-impl<T: Send> Packet<T> {
-    pub fn new(cap: uint) -> Packet<T> {
+impl<T> Packet<T> {
+    pub fn new(cap: usize) -> Packet<T> {
         Packet {
             channels: AtomicUsize::new(1),
             lock: Mutex::new(State {
@@ -150,7 +150,7 @@ impl<T: Send> Packet<T> {
                     tail: ptr::null_mut(),
                 },
                 buf: Buffer {
-                    buf: range(0, cap + if cap == 0 {1} else {0}).map(|_| None).collect(),
+                    buf: (0..cap + if cap == 0 {1} else {0}).map(|_| None).collect(),
                     start: 0,
                     size: 0,
                 },
@@ -298,7 +298,7 @@ impl<T: Send> Packet<T> {
         };
         mem::drop(guard);
 
-        // only outside of the lock do we wake up the pending tasks
+        // only outside of the lock do we wake up the pending threads
         pending_sender1.map(|t| t.signal());
         pending_sender2.map(|t| t.signal());
     }
@@ -394,8 +394,8 @@ impl<T: Send> Packet<T> {
         }
     }
 
-    // Remove a previous selecting task from this port. This ensures that the
-    // blocked task will no longer be visible to any other threads.
+    // Remove a previous selecting thread from this port. This ensures that the
+    // blocked thread will no longer be visible to any other threads.
     //
     // The return value indicates whether there's data on this port.
     pub fn abort_selection(&self) -> bool {
@@ -411,8 +411,7 @@ impl<T: Send> Packet<T> {
     }
 }
 
-#[unsafe_destructor]
-impl<T: Send> Drop for Packet<T> {
+impl<T> Drop for Packet<T> {
     fn drop(&mut self) {
         assert_eq!(self.channels.load(Ordering::SeqCst), 0);
         let mut guard = self.lock.lock().unwrap();
@@ -442,12 +441,12 @@ impl<T> Buffer<T> {
         result.take().unwrap()
     }
 
-    fn size(&self) -> uint { self.size }
-    fn cap(&self) -> uint { self.buf.len() }
+    fn size(&self) -> usize { self.size }
+    fn cap(&self) -> usize { self.buf.len() }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// Queue, a simple queue to enqueue tasks with (stack-allocated nodes)
+// Queue, a simple queue to enqueue threads with (stack-allocated nodes)
 ////////////////////////////////////////////////////////////////////////////////
 
 impl Queue {

@@ -8,12 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// ignore-android
-
 // Smallest "hello world" with a libc runtime
 
+// pretty-expanded FIXME #23616
+
+#![feature(intrinsics, lang_items, start, no_std, libc)]
 #![no_std]
-#![feature(intrinsics, lang_items, start)]
 
 extern crate libc;
 
@@ -26,11 +26,14 @@ extern "rust-intrinsic" { fn transmute<T, U>(t: T) -> U; }
 
 #[start]
 #[no_stack_check]
-fn main(_: int, _: *const *const u8) -> int {
+fn main(_: isize, _: *const *const u8) -> isize {
     unsafe {
-        let (ptr, _): (*const u8, uint) = transmute("Hello!\0");
+        let (ptr, _): (*const u8, usize) = transmute("Hello!\0");
         puts(ptr);
     }
     return 0;
 }
 
+#[cfg(target_os = "android")]
+#[link(name="gcc")]
+extern { }

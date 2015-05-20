@@ -62,24 +62,27 @@ independently:
 This API is completely unstable and subject to change.
 
 */
-
+// Do not remove on snapshot creation. Needed for bootstrap. (Issue #22364)
+#![cfg_attr(stage0, feature(custom_attribute))]
 #![crate_name = "rustc_typeck"]
-#![unstable]
+#![unstable(feature = "rustc_private")]
 #![staged_api]
 #![crate_type = "dylib"]
 #![crate_type = "rlib"]
 #![doc(html_logo_url = "http://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
-      html_favicon_url = "http://www.rust-lang.org/favicon.ico",
+      html_favicon_url = "https://doc.rust-lang.org/favicon.ico",
       html_root_url = "http://doc.rust-lang.org/nightly/")]
 
-#![allow(unknown_features)]
-#![feature(quote)]
-#![feature(slicing_syntax, unsafe_destructor)]
-#![feature(box_syntax)]
-#![feature(rustc_diagnostic_macros)]
-#![allow(unknown_features)] #![feature(int_uint)]
 #![allow(non_camel_case_types)]
-#![allow(unstable)]
+
+#![feature(box_patterns)]
+#![feature(box_syntax)]
+#![feature(collections, collections_drain)]
+#![feature(core)]
+#![feature(quote)]
+#![feature(rustc_diagnostic_macros)]
+#![feature(rustc_private)]
+#![feature(staged_api)]
 
 #[macro_use] extern crate log;
 #[macro_use] extern crate syntax;
@@ -97,7 +100,6 @@ pub use rustc::util;
 use middle::def;
 use middle::infer;
 use middle::subst;
-use middle::subst::VecPerParamSpace;
 use middle::ty::{self, Ty};
 use session::config;
 use util::common::time;
@@ -119,15 +121,16 @@ mod check;
 mod rscope;
 mod astconv;
 mod collect;
+mod constrained_type_params;
 mod coherence;
 mod variance;
 
-struct TypeAndSubsts<'tcx> {
+pub struct TypeAndSubsts<'tcx> {
     pub substs: subst::Substs<'tcx>,
     pub ty: Ty<'tcx>,
 }
 
-struct CrateCtxt<'a, 'tcx: 'a> {
+pub struct CrateCtxt<'a, 'tcx: 'a> {
     // A mapping from method call sites to traits that have that method.
     trait_map: ty::TraitMap,
     /// A vector of every trait accessible in the whole crate
@@ -142,7 +145,7 @@ struct CrateCtxt<'a, 'tcx: 'a> {
 fn write_ty_to_tcx<'tcx>(tcx: &ty::ctxt<'tcx>, node_id: ast::NodeId, ty: Ty<'tcx>) {
     debug!("write_ty_to_tcx({}, {})", node_id, ppaux::ty_to_string(tcx, ty));
     assert!(!ty::type_needs_infer(ty));
-    tcx.node_types.borrow_mut().insert(node_id, ty);
+    tcx.node_type_insert(node_id, ty);
 }
 
 fn write_substs_to_tcx<'tcx>(tcx: &ty::ctxt<'tcx>,
@@ -158,28 +161,13 @@ fn write_substs_to_tcx<'tcx>(tcx: &ty::ctxt<'tcx>,
         tcx.item_substs.borrow_mut().insert(node_id, item_substs);
     }
 }
-fn lookup_def_tcx(tcx:&ty::ctxt, sp: Span, id: ast::NodeId) -> def::Def {
+
+fn lookup_full_def(tcx: &ty::ctxt, sp: Span, id: ast::NodeId) -> def::Def {
     match tcx.def_map.borrow().get(&id) {
-        Some(x) => x.clone(),
-        _ => {
+        Some(x) => x.full_def(),
+        None => {
             span_fatal!(tcx.sess, sp, E0242, "internal error looking up a definition")
         }
-    }
-}
-
-fn lookup_def_ccx(ccx: &CrateCtxt, sp: Span, id: ast::NodeId)
-                   -> def::Def {
-    lookup_def_tcx(ccx.tcx, sp, id)
-}
-
-fn no_params<'tcx>(t: Ty<'tcx>) -> ty::TypeScheme<'tcx> {
-    ty::TypeScheme {
-        generics: ty::Generics {
-            types: VecPerParamSpace::empty(),
-            regions: VecPerParamSpace::empty(),
-            predicates: VecPerParamSpace::empty(),
-        },
-        ty: t
     }
 }
 
@@ -211,7 +199,7 @@ fn require_same_types<'a, 'tcx, M>(tcx: &ty::ctxt<'tcx>,
                                       msg(),
                                       ty::type_err_to_str(tcx,
                                                           terr));
-            ty::note_and_explain_type_err(tcx, terr);
+            ty::note_and_explain_type_err(tcx, terr, span);
             false
         }
     }
@@ -259,7 +247,7 @@ fn check_main_fn_ty(ccx: &CrateCtxt,
                               &format!("main has a non-function type: found \
                                        `{}`",
                                       ppaux::ty_to_string(tcx,
-                                                       main_t))[]);
+                                                       main_t)));
         }
     }
 }
@@ -291,10 +279,10 @@ fn check_start_fn_ty(ccx: &CrateCtxt,
                 abi: abi::Rust,
                 sig: ty::Binder(ty::FnSig {
                     inputs: vec!(
-                        tcx.types.int,
+                        tcx.types.isize,
                         ty::mk_imm_ptr(tcx, ty::mk_imm_ptr(tcx, tcx.types.u8))
                     ),
-                    output: ty::FnConverging(tcx.types.int),
+                    output: ty::FnConverging(tcx.types.isize),
                     variadic: false,
                 }),
             }));
@@ -310,7 +298,7 @@ fn check_start_fn_ty(ccx: &CrateCtxt,
             tcx.sess.span_bug(start_span,
                               &format!("start has a non-function type: found \
                                        `{}`",
-                                      ppaux::ty_to_string(tcx, start_t))[]);
+                                      ppaux::ty_to_string(tcx, start_t)));
         }
     }
 }
@@ -355,3 +343,8 @@ pub fn check_crate(tcx: &ty::ctxt, trait_map: ty::TraitMap) {
     check_for_entry_fn(&ccx);
     tcx.sess.abort_if_errors();
 }
+
+#[cfg(stage0)]
+__build_diagnostic_array! { DIAGNOSTICS }
+#[cfg(not(stage0))]
+__build_diagnostic_array! { librustc_typeck, DIAGNOSTICS }

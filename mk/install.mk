@@ -8,12 +8,6 @@
 # option. This file may not be copied, modified, or distributed
 # except according to those terms.
 
-ifdef CFG_DISABLE_VERIFY_INSTALL
-MAYBE_DISABLE_VERIFY=--disable-verify
-else
-MAYBE_DISABLE_VERIFY=
-endif
-
 install:
 ifeq (root user, $(USER) $(patsubst %,user,$(SUDO_USER)))
 # Build the dist as the original user
@@ -22,9 +16,9 @@ else
 	$(Q)$(MAKE) prepare_install
 endif
 ifeq ($(CFG_DISABLE_DOCS),)
-	$(Q)cd tmp/empty_dir && sh ../../tmp/dist/$(DOC_PKG_NAME)-$(CFG_BUILD)/install.sh --prefix="$(DESTDIR)$(CFG_PREFIX)" --libdir="$(DESTDIR)$(CFG_LIBDIR)" --mandir="$(DESTDIR)$(CFG_MANDIR)" "$(MAYBE_DISABLE_VERIFY)"
+	$(Q)cd tmp/empty_dir && sh ../../tmp/dist/$(DOC_PKG_NAME)-$(CFG_BUILD)/install.sh --prefix="$(DESTDIR)$(CFG_PREFIX)" --libdir="$(DESTDIR)$(CFG_LIBDIR)" --mandir="$(DESTDIR)$(CFG_MANDIR)"
 endif
-	$(Q)cd tmp/empty_dir && sh ../../tmp/dist/$(PKG_NAME)-$(CFG_BUILD)/install.sh --prefix="$(DESTDIR)$(CFG_PREFIX)" --libdir="$(DESTDIR)$(CFG_LIBDIR)" --mandir="$(DESTDIR)$(CFG_MANDIR)" "$(MAYBE_DISABLE_VERIFY)"
+	$(Q)cd tmp/empty_dir && sh ../../tmp/dist/$(PKG_NAME)-$(CFG_BUILD)/install.sh --prefix="$(DESTDIR)$(CFG_PREFIX)" --libdir="$(DESTDIR)$(CFG_LIBDIR)" --mandir="$(DESTDIR)$(CFG_MANDIR)"
 # Remove tmp files because it's a decent amount of disk space
 	$(Q)rm -R tmp/dist
 
@@ -58,14 +52,13 @@ tmp/empty_dir:
 # Android runtime setup
 # FIXME: This probably belongs somewhere else
 
-# target platform specific variables
-# for arm-linux-androidabi
+# target platform specific variables for android
 define DEF_ADB_DEVICE_STATUS
 CFG_ADB_DEVICE_STATUS=$(1)
 endef
 
 $(foreach target,$(CFG_TARGET), \
-  $(if $(findstring $(target),"arm-linux-androideabi"), \
+  $(if $(findstring android, $(target)), \
     $(if $(findstring adb,$(CFG_ADB)), \
       $(if $(findstring device,$(shell $(CFG_ADB) devices 2>/dev/null | grep -E '^[_A-Za-z0-9-]+[[:blank:]]+device')), \
         $(info install: install-runtime-target for $(target) enabled \
@@ -117,8 +110,11 @@ install-runtime-target-$(1)-cleanup:
 	    $$(call ADB_SHELL,rm,$$(CFG_RUNTIME_PUSH_DIR)/$$(call CFG_LIB_GLOB_$(1),$$(crate)));)
 endef
 
-$(eval $(call INSTALL_RUNTIME_TARGET_N,arm-linux-androideabi,$(CFG_BUILD)))
-$(eval $(call INSTALL_RUNTIME_TARGET_CLEANUP_N,arm-linux-androideabi))
+$(foreach target,$(CFG_TARGET), \
+ $(if $(findstring $(CFG_ADB_DEVICE_STATUS),"true"), \
+  $(eval $(call INSTALL_RUNTIME_TARGET_N,$(taget),$(CFG_BUILD))) \
+  $(eval $(call INSTALL_RUNTIME_TARGET_CLEANUP_N,$(target))) \
+  ))
 
 install-runtime-target: \
 	install-runtime-target-arm-linux-androideabi-cleanup \

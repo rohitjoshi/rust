@@ -10,8 +10,10 @@
 
 // Test coercions involving DST and/or raw pointers
 
+// pretty-expanded FIXME #23616
+
 struct S;
-trait T {}
+trait T { fn dummy(&self) { } }
 impl T for S {}
 
 pub fn main() {

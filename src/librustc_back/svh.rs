@@ -48,11 +48,10 @@
 
 use std::fmt;
 use std::hash::{Hash, SipHasher, Hasher};
-use std::iter::range_step;
 use syntax::ast;
 use syntax::visit;
 
-#[derive(Clone, PartialEq, Show)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Svh {
     hash: String,
 }
@@ -64,7 +63,7 @@ impl Svh {
     }
 
     pub fn as_str<'a>(&'a self) -> &'a str {
-        &self.hash[]
+        &self.hash
     }
 
     pub fn calculate(metadata: &Vec<String>, krate: &ast::Crate) -> Svh {
@@ -79,7 +78,7 @@ impl Svh {
         //        avoid collisions.
         let mut state = SipHasher::new();
 
-        for data in metadata.iter() {
+        for data in metadata {
             data.hash(&mut state);
         }
 
@@ -97,13 +96,13 @@ impl Svh {
         //
         // We hash only the MetaItems instead of the entire Attribute
         // to avoid hashing the AttrId
-        for attr in krate.attrs.iter() {
+        for attr in &krate.attrs {
             attr.node.value.hash(&mut state);
         }
 
         let hash = state.finish();
         return Svh {
-            hash: range_step(0u, 64u, 4u).map(|i| hex(hash >> i)).collect()
+            hash: (0..64).step_by(4).map(|i| hex(hash >> i)).collect()
         };
 
         fn hex(b: u64) -> char {
@@ -188,8 +187,8 @@ mod svh_visitor {
         SawTy,
         SawGenerics,
         SawFn,
-        SawTyMethod,
-        SawTraitMethod,
+        SawTraitItem,
+        SawImplItem,
         SawStructField,
         SawVariant,
         SawExplicitSelf,
@@ -222,7 +221,7 @@ mod svh_visitor {
 
         SawExprLoop(Option<token::InternedString>),
         SawExprField(token::InternedString),
-        SawExprTupField(uint),
+        SawExprTupField(usize),
         SawExprBreak(Option<token::InternedString>),
         SawExprAgain(Option<token::InternedString>),
 
@@ -244,15 +243,13 @@ mod svh_visitor {
         SawExprAssignOp(ast::BinOp_),
         SawExprIndex,
         SawExprRange,
-        SawExprPath,
-        SawExprQPath,
+        SawExprPath(Option<usize>),
         SawExprAddrOf(ast::Mutability),
         SawExprRet,
         SawExprInlineAsm(&'a ast::InlineAsm),
         SawExprStruct,
         SawExprRepeat,
         SawExprParen,
-        SawExprForLoop,
     }
 
     fn saw_expr<'a>(node: &'a Expr_) -> SawExprComponent<'a> {
@@ -278,8 +275,7 @@ mod svh_visitor {
             ExprTupField(_, id)      => SawExprTupField(id.node),
             ExprIndex(..)            => SawExprIndex,
             ExprRange(..)            => SawExprRange,
-            ExprPath(..)             => SawExprPath,
-            ExprQPath(..)            => SawExprQPath,
+            ExprPath(ref qself, _)   => SawExprPath(qself.as_ref().map(|q| q.position)),
             ExprAddrOf(m, _)         => SawExprAddrOf(m),
             ExprBreak(id)            => SawExprBreak(id.map(content)),
             ExprAgain(id)            => SawExprAgain(id.map(content)),
@@ -288,9 +284,9 @@ mod svh_visitor {
             ExprStruct(..)           => SawExprStruct,
             ExprRepeat(..)           => SawExprRepeat,
             ExprParen(..)            => SawExprParen,
-            ExprForLoop(..)          => SawExprForLoop,
 
             // just syntactic artifacts, expanded away by time of SVH.
+            ExprForLoop(..)          => unreachable!(),
             ExprIfLet(..)            => unreachable!(),
             ExprWhileLet(..)         => unreachable!(),
             ExprMac(..)              => unreachable!(),
@@ -330,7 +326,7 @@ mod svh_visitor {
             // macro invocations, namely macro_rules definitions,
             // *can* appear as items, even in the expanded crate AST.
 
-            if macro_name(mac).get() == "macro_rules" {
+            if &macro_name(mac)[..] == "macro_rules" {
                 // Pretty-printing definition to a string strips out
                 // surface artifacts (currently), such as the span
                 // information, yielding a content-based hash.
@@ -357,7 +353,7 @@ mod svh_visitor {
             fn macro_name(mac: &Mac) -> token::InternedString {
                 match &mac.node {
                     &MacInvocTT(ref path, ref _tts, ref _stx_ctxt) => {
-                        let s = &path.segments[];
+                        let s = &path.segments;
                         assert_eq!(s.len(), 1);
                         content(s[0].identifier)
                     }
@@ -466,12 +462,12 @@ mod svh_visitor {
             SawFn.hash(self.st); visit::walk_fn(self, fk, fd, b, s)
         }
 
-        fn visit_ty_method(&mut self, t: &TypeMethod) {
-            SawTyMethod.hash(self.st); visit::walk_ty_method(self, t)
+        fn visit_trait_item(&mut self, ti: &TraitItem) {
+            SawTraitItem.hash(self.st); visit::walk_trait_item(self, ti)
         }
 
-        fn visit_trait_item(&mut self, t: &TraitItem) {
-            SawTraitMethod.hash(self.st); visit::walk_trait_item(self, t)
+        fn visit_impl_item(&mut self, ii: &ImplItem) {
+            SawImplItem.hash(self.st); visit::walk_impl_item(self, ii)
         }
 
         fn visit_struct_field(&mut self, s: &StructField) {

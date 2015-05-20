@@ -8,9 +8,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::{char, os};
-use std::old_io::{File, Command};
-use std::rand::{thread_rng, Rng};
+#![feature(rand)]
+
+use std::fs::File;
+use std::io::prelude::*;
+use std::path::Path;
+use std::process::Command;
+use std::__rand::{thread_rng, Rng};
+use std::{char, env};
 
 // creates unicode_input_multiple_files_{main,chars}.rs, where the
 // former imports the latter. `_chars` just contains an identifier
@@ -33,22 +38,22 @@ fn random_char() -> char {
 }
 
 fn main() {
-    let args = os::args();
-    let rustc = args[1].as_slice();
-    let tmpdir = Path::new(args[2].as_slice());
+    let args: Vec<String> = env::args().collect();
+    let rustc = &args[1];
+    let tmpdir = Path::new(&args[2]);
 
     let main_file = tmpdir.join("unicode_input_multiple_files_main.rs");
     {
         let _ = File::create(&main_file).unwrap()
-            .write_str("mod unicode_input_multiple_files_chars;");
+            .write_all(b"mod unicode_input_multiple_files_chars;").unwrap();
     }
 
-    for _ in range(0u, 100) {
+    for _ in 0..100 {
         {
             let randoms = tmpdir.join("unicode_input_multiple_files_chars.rs");
             let mut w = File::create(&randoms).unwrap();
-            for _ in range(0u, 30) {
-                let _ = w.write_char(random_char());
+            for _ in 0..30 {
+                write!(&mut w, "{}", random_char()).unwrap();
             }
         }
 
@@ -56,15 +61,14 @@ fn main() {
         // can't exec it directly
         let result = Command::new("sh")
                              .arg("-c")
-                             .arg(format!("{} {}",
-                                          rustc,
-                                          main_file.as_str()
-                                                   .unwrap()).as_slice())
+                             .arg(&format!("{} {}",
+                                           rustc,
+                                           main_file.display()))
                              .output().unwrap();
-        let err = String::from_utf8_lossy(result.error.as_slice());
+        let err = String::from_utf8_lossy(&result.stderr);
 
         // positive test so that this test will be updated when the
         // compiler changes.
-        assert!(err.as_slice().contains("expected item, found"))
+        assert!(err.contains("expected item, found"))
     }
 }

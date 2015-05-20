@@ -8,13 +8,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+
 pub fn main() {
     let mut x = None;
     match x {
       None => {
         // It is ok to reassign x here, because there is in
         // fact no outstanding loan of x!
-        x = Some(0i);
+        x = Some(0);
       }
       Some(_) => { }
     }

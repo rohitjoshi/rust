@@ -10,15 +10,16 @@
 
 // Test DST raw pointers
 
+
 trait Trait {
-    fn foo(&self) -> int;
+    fn foo(&self) -> isize;
 }
 
 struct A {
-    f: int
+    f: isize
 }
 impl Trait for A {
-    fn foo(&self) -> int {
+    fn foo(&self) -> isize {
         self.f
     }
 }
@@ -45,7 +46,7 @@ pub fn main() {
     assert!(r == 42);
 
     // raw slice
-    let a: *const [_] = &[1i, 2, 3];
+    let a: *const [_] = &[1, 2, 3];
     unsafe {
         let b = (*a)[2];
         assert!(b == 3);
@@ -54,7 +55,7 @@ pub fn main() {
     }
 
     // raw slice with explicit cast
-    let a = &[1i, 2, 3] as *const [_];
+    let a = &[1, 2, 3] as *const [i32];
     unsafe {
         let b = (*a)[2];
         assert!(b == 3);
@@ -63,7 +64,7 @@ pub fn main() {
     }
 
     // raw DST struct with slice
-    let c: *const Foo<[_]> = &Foo {f: [1i, 2, 3]};
+    let c: *const Foo<[_]> = &Foo {f: [1, 2, 3]};
     unsafe {
         let b = (&*c).f[0];
         assert!(b == 1);
@@ -86,7 +87,7 @@ pub fn main() {
     };
     assert!(r == 42);
 
-    let a: *mut [_] = &mut [1i, 2, 3];
+    let a: *mut [_] = &mut [1, 2, 3];
     unsafe {
         let b = (*a)[2];
         assert!(b == 3);
@@ -94,7 +95,7 @@ pub fn main() {
         assert!(len == 3);
     }
 
-    let a = &mut [1i, 2, 3] as *mut [_];
+    let a = &mut [1, 2, 3] as *mut [i32];
     unsafe {
         let b = (*a)[2];
         assert!(b == 3);
@@ -102,7 +103,7 @@ pub fn main() {
         assert!(len == 3);
     }
 
-    let c: *mut Foo<[_]> = &mut Foo {f: [1i, 2, 3]};
+    let c: *mut Foo<[_]> = &mut Foo {f: [1, 2, 3]};
     unsafe {
         let b = (&*c).f[0];
         assert!(b == 1);

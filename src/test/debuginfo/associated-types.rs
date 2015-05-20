@@ -8,7 +8,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// ignore-android: FIXME(#10381)
 // min-lldb-version: 310
 
 // compile-flags:-g
@@ -31,7 +30,7 @@
 // gdb-command:continue
 
 // gdb-command:print arg
-// gdb-check:$5 = {4, 5}
+// gdb-check:$5 = {__0 = 4, __1 = 5}
 // gdb-command:continue
 
 // gdb-command:print a
@@ -140,13 +139,13 @@ fn assoc_enum<T: TraitWithAssocType>(arg: Enum<T>) {
 }
 
 fn main() {
-    assoc_struct(Struct { b: -1i32, b1: 0i64 });
-    assoc_local(1i32);
-    assoc_arg::<i32>(2i64);
-    assoc_return_value(3i32);
-    assoc_tuple((4i32, 5i64));
-    assoc_enum(Enum::Variant1(6i32, 7i64));
-    assoc_enum(Enum::Variant2(8i64, 9i32));
+    assoc_struct(Struct { b: -1, b1: 0 });
+    assoc_local(1);
+    assoc_arg::<i32>(2);
+    assoc_return_value(3);
+    assoc_tuple((4, 5));
+    assoc_enum(Enum::Variant1(6, 7));
+    assoc_enum(Enum::Variant2(8, 9));
 }
 
 fn zzz() { () }

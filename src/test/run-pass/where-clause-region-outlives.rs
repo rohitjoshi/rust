@@ -8,10 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-struct A<'a, 'b> where 'a : 'b { x: &'a int, y: &'b int }
+// pretty-expanded FIXME #23616
+
+struct A<'a, 'b> where 'a : 'b { x: &'a isize, y: &'b isize }
 
 fn main() {
-    let x = 1i;
-    let y = 1i;
+    let x = 1;
+    let y = 1;
     let a = A { x: &x, y: &y };
 }

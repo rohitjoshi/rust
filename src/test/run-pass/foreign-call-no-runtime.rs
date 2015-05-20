@@ -8,10 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// ignore-aarch64
+#![feature(libc)]
+
 extern crate libc;
 
 use std::mem;
-use std::thread::Thread;
+use std::thread;
 
 #[link(name = "rust_test_helpers")]
 extern {
@@ -21,16 +24,16 @@ extern {
 
 pub fn main() {
     unsafe {
-        Thread::scoped(move|| {
-            let i = &100i;
-            rust_dbg_call(callback, mem::transmute(i));
+        thread::spawn(move|| {
+            let i = 100;
+            rust_dbg_call(callback, mem::transmute(&i));
         }).join();
     }
 }
 
 extern fn callback(data: libc::uintptr_t) {
     unsafe {
-        let data: *const int = mem::transmute(data);
-        assert_eq!(*data, 100i);
+        let data: *const isize = mem::transmute(data);
+        assert_eq!(*data, 100);
     }
 }

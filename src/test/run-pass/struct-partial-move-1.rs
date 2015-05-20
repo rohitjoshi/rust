@@ -8,12 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[derive(PartialEq, Show)]
+#[derive(PartialEq, Debug)]
 pub struct Partial<T> { x: T, y: T }
 
-#[derive(PartialEq, Show)]
-struct S { val: int }
-impl S { fn new(v: int) -> S { S { val: v } } }
+#[derive(PartialEq, Debug)]
+struct S { val: isize }
+impl S { fn new(v: isize) -> S { S { val: v } } }
 impl Drop for S { fn drop(&mut self) { } }
 
 pub fn f<T, F>((b1, b2): (T, T), mut f: F) -> Partial<T> where F: FnMut(T) -> T {

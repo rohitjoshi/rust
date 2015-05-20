@@ -12,5 +12,5 @@ const TUP: (usize,) = (42,);
 
 fn main() {
     let a: [isize; TUP.1];
-    //~^ ERROR expected constant expr for array length: tuple index out of bounds
+    //~^ ERROR attempted out-of-bounds tuple index
 }

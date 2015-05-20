@@ -12,8 +12,10 @@
 #![allow(dead_code)]
 #![crate_type="lib"]
 
-struct Private<T>;
-pub struct Public<T>;
+use std::marker;
+
+struct Private<T>(marker::PhantomData<T>);
+pub struct Public<T>(marker::PhantomData<T>);
 
 impl Private<Public<isize>> {
     pub fn a(&self) -> Private<isize> { panic!() }

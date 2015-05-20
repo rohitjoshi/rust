@@ -8,8 +8,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(unboxed_closures)]
-
 use std::any::Any;
 use std::any::TypeId;
 
@@ -19,9 +17,8 @@ pub trait Rt {}
 trait Private<P: Pt, R: Rt> {
     fn call(&self, p: P, r: R);
 }
-pub trait Public: Private<
+pub trait Public: Private< //~ ERROR private trait in exported type parameter bound
     <Self as Public>::P,
-//~^ ERROR illegal recursive type; insert an enum or struct in the cycle, if this is desired
     <Self as Public>::R
 > {
     type P;

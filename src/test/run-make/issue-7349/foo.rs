@@ -10,21 +10,21 @@
 
 fn outer<T>() {
     #[allow(dead_code)]
-    fn inner() -> uint {
+    fn inner() -> u32 {
         8675309
     }
 }
 
 extern "C" fn outer_foreign<T>() {
     #[allow(dead_code)]
-    fn inner() -> uint {
+    fn inner() -> u32 {
         11235813
     }
 }
 
 fn main() {
-    outer::<int>();
-    outer::<uint>();
-    outer_foreign::<int>();
-    outer_foreign::<uint>();
+    outer::<isize>();
+    outer::<usize>();
+    outer_foreign::<isize>();
+    outer_foreign::<usize>();
 }

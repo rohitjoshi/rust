@@ -10,8 +10,8 @@
 
 #![allow(unused_variables)]
 #![allow(non_camel_case_types)]
-#![allow(unstable)]
 #![deny(dead_code)]
+#![feature(libc)]
 
 #![crate_type="lib"]
 
@@ -19,7 +19,7 @@ extern crate libc;
 
 pub use extern_foo as x;
 extern {
-    fn extern_foo();
+    pub fn extern_foo();
 }
 
 struct Foo; //~ ERROR: struct is never used
@@ -86,6 +86,6 @@ mod inner {
 }
 
 pub fn foo() {
-    let a = &1is as &inner::Trait;
+    let a: &inner::Trait = &1_isize;
     a.f();
 }

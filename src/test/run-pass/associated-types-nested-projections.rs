@@ -10,11 +10,15 @@
 
 // Test that we can resolve nested projection types. Issue #20666.
 
+// pretty-expanded FIXME #23616
+
+#![feature(core)]
+
 use std::slice;
 
 trait Bound {}
 
-impl<'a> Bound for &'a int {}
+impl<'a> Bound for &'a i32 {}
 
 trait IntoIterator {
     type Iter: Iterator;
@@ -45,6 +49,6 @@ fn bar<T, I, X>(x: X) where
 }
 
 fn main() {
-    foo(&[0i, 1, 2]);
-    bar(&[0i, 1, 2]);
+    foo(&[0, 1, 2]);
+    bar(&[0, 1, 2]);
 }

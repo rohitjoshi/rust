@@ -24,11 +24,11 @@
 //! # Usage
 //!
 //! This module should likely not be used directly unless other primitives are
-//! being built on. types such as `thread_local::scoped::Key` are likely much
+//! being built on. types such as `thread_local::spawn::Key` are likely much
 //! more useful in practice than this OS-based version which likely requires
 //! unsafe code to interoperate with.
 //!
-//! # Example
+//! # Examples
 //!
 //! Using a dynamically allocated TLS key. Note that this key can be shared
 //! among many threads via an `Arc`.
@@ -55,11 +55,12 @@
 //! ```
 
 #![allow(non_camel_case_types)]
+#![unstable(feature = "thread_local_internals")]
+#![allow(dead_code)] // sys isn't exported yet
 
 use prelude::v1::*;
 
 use sync::atomic::{self, AtomicUsize, Ordering};
-use sync::{Mutex, Once, ONCE_INIT};
 
 use sys::thread_local as imp;
 
@@ -72,7 +73,7 @@ use sys::thread_local as imp;
 /// time. The key is also deallocated when the Rust runtime exits or `destroy`
 /// is called, whichever comes first.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```ignore
 /// use tls::os::{StaticKey, INIT};
@@ -109,7 +110,7 @@ pub struct StaticKeyInner {
 /// Implementations will likely, however, contain unsafe code as this type only
 /// operates on `*mut u8`, an unsafe pointer.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```rust,ignore
 /// use tls::os::Key;
@@ -139,9 +140,6 @@ pub const INIT: StaticKey = StaticKey {
 pub const INIT_INNER: StaticKeyInner = StaticKeyInner {
     key: atomic::ATOMIC_USIZE_INIT,
 };
-
-static INIT_KEYS: Once = ONCE_INIT;
-static mut KEYS: *mut Mutex<Vec<imp::Key>> = 0 as *mut _;
 
 impl StaticKey {
     /// Gets the value associated with this TLS key
@@ -180,7 +178,7 @@ impl StaticKey {
         }
     }
 
-    unsafe fn lazy_init(&self) -> uint {
+    unsafe fn lazy_init(&self) -> usize {
         // POSIX allows the key created here to be 0, but the compare_and_swap
         // below relies on using 0 as a sentinel value to check who won the
         // race to set the shared TLS key. As far as I know, there is no
@@ -199,9 +197,9 @@ impl StaticKey {
             key2
         };
         assert!(key != 0);
-        match self.inner.key.compare_and_swap(0, key as uint, Ordering::SeqCst) {
+        match self.inner.key.compare_and_swap(0, key as usize, Ordering::SeqCst) {
             // The CAS succeeded, so we've created the actual key
-            0 => key as uint,
+            0 => key as usize,
             // If someone beat us to the punch, use their key instead
             n => { imp::destroy(key); n }
         }
@@ -209,7 +207,7 @@ impl StaticKey {
 }
 
 impl Key {
-    /// Create a new managed OS TLS key.
+    /// Creates a new managed OS TLS key.
     ///
     /// This key will be deallocated when the key falls out of scope.
     ///
@@ -263,8 +261,8 @@ mod tests {
         assert!(k2.get().is_null());
         k1.set(1 as *mut _);
         k2.set(2 as *mut _);
-        assert_eq!(k1.get() as uint, 1);
-        assert_eq!(k2.get() as uint, 2);
+        assert_eq!(k1.get() as usize, 1);
+        assert_eq!(k2.get() as usize, 2);
     }
 
     #[test]
@@ -277,8 +275,8 @@ mod tests {
             assert!(K2.get().is_null());
             K1.set(1 as *mut _);
             K2.set(2 as *mut _);
-            assert_eq!(K1.get() as uint, 1);
-            assert_eq!(K2.get() as uint, 2);
+            assert_eq!(K1.get() as usize, 1);
+            assert_eq!(K2.get() as usize, 2);
         }
     }
 }

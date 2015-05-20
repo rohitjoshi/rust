@@ -14,7 +14,9 @@
 // reasonable examples) let to ambiguity errors about not being able
 // to infer sufficient type information.
 
+// pretty-expanded FIXME #23616
+
 fn main() {
     let n = 0;
-    let it = Some(1_us).into_iter().inspect(|_| {n;});
+    let it = Some(1_usize).into_iter().inspect(|_| {n;});
 }

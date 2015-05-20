@@ -8,9 +8,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(unsafe_destructor)]
+// pretty-expanded FIXME #23616
 
-pub struct Foo<T>;
+use std::marker;
+
+pub struct Foo<T>(marker::PhantomData<T>);
 
 impl<T> Iterator for Foo<T> {
     type Item = T;
@@ -20,7 +22,6 @@ impl<T> Iterator for Foo<T> {
     }
 }
 
-#[unsafe_destructor]
 impl<T> Drop for Foo<T> {
     fn drop(&mut self) {
         self.next();

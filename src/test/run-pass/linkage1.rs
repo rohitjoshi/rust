@@ -9,19 +9,18 @@
 // except according to those terms.
 
 // ignore-windows
-// ignore-android
 // ignore-macos
 // aux-build:linkage1.rs
 
 #![feature(linkage)]
 
-extern crate "linkage1" as other;
+extern crate linkage1 as other;
 
 extern {
     #[linkage = "extern_weak"]
-    static foo: *const int;
+    static foo: *const isize;
     #[linkage = "extern_weak"]
-    static something_that_should_never_exist: *mut int;
+    static something_that_should_never_exist: *mut isize;
 }
 
 fn main() {

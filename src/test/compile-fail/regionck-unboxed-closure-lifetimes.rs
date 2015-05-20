@@ -17,7 +17,6 @@ fn main() {
     {
         let c = 1;
         let c_ref = &c; //~ ERROR `c` does not live long enough
-        f = move |&mut: a: isize, b: isize| { a + b + *c_ref };
+        f = move |a: isize, b: isize| { a + b + *c_ref };
     }
 }
-

@@ -8,6 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+
 #![allow(unknown_features)]
 #![feature(box_syntax)]
 #![feature(intrinsics)]
@@ -40,7 +41,7 @@ mod rusti {
 
 pub fn main() {
     unsafe {
-        let mut x = box 1i;
+        let mut x: Box<_> = box 1;
 
         assert_eq!(rusti::atomic_load(&*x), 1);
         *x = 5;

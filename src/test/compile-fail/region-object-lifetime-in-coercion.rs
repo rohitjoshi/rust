@@ -11,30 +11,36 @@
 // Test that attempts to implicitly coerce a value into an
 // object respect the lifetime bound on the object type.
 
-#![feature(box_syntax)]
-
 trait Foo {}
 impl<'a> Foo for &'a [u8] {}
 
+// FIXME (#22405): Replace `Box::new` with `box` here when/if possible.
+
 fn a(v: &[u8]) -> Box<Foo + 'static> {
-    let x: Box<Foo + 'static> = box v; //~ ERROR declared lifetime bound not satisfied
+    let x: Box<Foo + 'static> = Box::new(v);
+    //~^ ERROR cannot infer an appropriate lifetime due to conflicting
     x
 }
 
 fn b(v: &[u8]) -> Box<Foo + 'static> {
-    box v //~ ERROR declared lifetime bound not satisfied
+    Box::new(v)
+        //~^ ERROR cannot infer an appropriate lifetime due to conflicting
 }
 
 fn c(v: &[u8]) -> Box<Foo> {
-    box v // OK thanks to lifetime elision
+    // same as previous case due to RFC 599
+
+    Box::new(v)
+        //~^ ERROR cannot infer an appropriate lifetime due to conflicting
 }
 
 fn d<'a,'b>(v: &'a [u8]) -> Box<Foo+'b> {
-    box v //~ ERROR declared lifetime bound not satisfied
+    Box::new(v)
+        //~^ ERROR cannot infer an appropriate lifetime due to conflicting
 }
 
 fn e<'a:'b,'b>(v: &'a [u8]) -> Box<Foo+'b> {
-    box v // OK, thanks to 'a:'b
+    Box::new(v) // OK, thanks to 'a:'b
 }
 
 fn main() { }

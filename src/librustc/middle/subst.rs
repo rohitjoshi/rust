@@ -18,6 +18,7 @@ use middle::ty_fold::{self, TypeFoldable, TypeFolder};
 use util::ppaux::Repr;
 
 use std::fmt;
+use std::iter::IntoIterator;
 use std::slice::Iter;
 use std::vec::{Vec, IntoIter};
 use syntax::codemap::{Span, DUMMY_SP};
@@ -28,7 +29,7 @@ use syntax::codemap::{Span, DUMMY_SP};
 /// identify each in-scope parameter by an *index* and a *parameter
 /// space* (which indices where the parameter is defined; see
 /// `ParamSpace`).
-#[derive(Clone, PartialEq, Eq, Hash, Show)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Substs<'tcx> {
     pub types: VecPerParamSpace<Ty<'tcx>>,
     pub regions: RegionSubsts,
@@ -37,7 +38,7 @@ pub struct Substs<'tcx> {
 /// Represents the values to use when substituting lifetime parameters.
 /// If the value is `ErasedRegions`, then this subst is occurring during
 /// trans, and all region parameters will be replaced with `ty::ReStatic`.
-#[derive(Clone, PartialEq, Eq, Hash, Show)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum RegionSubsts {
     ErasedRegions,
     NonerasedRegions(VecPerParamSpace<ty::Region>)
@@ -97,7 +98,7 @@ impl<'tcx> Substs<'tcx> {
     }
 
     pub fn type_for_def(&self, ty_param_def: &ty::TypeParameterDef) -> Ty<'tcx> {
-        *self.types.get(ty_param_def.space, ty_param_def.index as uint)
+        *self.types.get(ty_param_def.space, ty_param_def.index as usize)
     }
 
     pub fn has_regions_escaping_depth(&self, depth: u32) -> bool {
@@ -112,7 +113,7 @@ impl<'tcx> Substs<'tcx> {
     }
 
     pub fn self_ty(&self) -> Option<Ty<'tcx>> {
-        self.types.get_self().map(|&t| t)
+        self.types.get_self().cloned()
     }
 
     pub fn with_self_ty(&self, self_ty: Ty<'tcx>) -> Substs<'tcx> {
@@ -180,7 +181,7 @@ impl RegionSubsts {
 // ParamSpace
 
 #[derive(PartialOrd, Ord, PartialEq, Eq, Copy,
-           Clone, Hash, RustcEncodable, RustcDecodable, Show)]
+           Clone, Hash, RustcEncodable, RustcDecodable, Debug)]
 pub enum ParamSpace {
     TypeSpace,  // Type parameters attached to a type definition, trait, or impl
     SelfSpace,  // Self parameter on a trait
@@ -192,7 +193,7 @@ impl ParamSpace {
         [TypeSpace, SelfSpace, FnSpace]
     }
 
-    pub fn to_uint(self) -> uint {
+    pub fn to_uint(self) -> usize {
         match self {
             TypeSpace => 0,
             SelfSpace => 1,
@@ -200,7 +201,7 @@ impl ParamSpace {
         }
     }
 
-    pub fn from_uint(u: uint) -> ParamSpace {
+    pub fn from_uint(u: usize) -> ParamSpace {
         match u {
             0 => TypeSpace,
             1 => SelfSpace,
@@ -225,8 +226,8 @@ pub struct VecPerParamSpace<T> {
     // AF(self) = (self.content[..self.type_limit],
     //             self.content[self.type_limit..self.self_limit],
     //             self.content[self.self_limit..])
-    type_limit: uint,
-    self_limit: uint,
+    type_limit: usize,
+    self_limit: usize,
     content: Vec<T>,
 }
 
@@ -241,7 +242,7 @@ pub struct SeparateVecsPerParamSpace<T> {
 impl<T: fmt::Debug> fmt::Debug for VecPerParamSpace<T> {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         try!(write!(fmt, "VecPerParamSpace {{"));
-        for space in ParamSpace::all().iter() {
+        for space in &ParamSpace::all() {
             try!(write!(fmt, "{:?}: {:?}, ", *space, self.get_slice(*space)));
         }
         try!(write!(fmt, "}}"));
@@ -250,7 +251,7 @@ impl<T: fmt::Debug> fmt::Debug for VecPerParamSpace<T> {
 }
 
 impl<T> VecPerParamSpace<T> {
-    fn limits(&self, space: ParamSpace) -> (uint, uint) {
+    fn limits(&self, space: ParamSpace) -> (usize, usize) {
         match space {
             TypeSpace => (0, self.type_limit),
             SelfSpace => (self.type_limit, self.self_limit),
@@ -272,7 +273,6 @@ impl<T> VecPerParamSpace<T> {
 
     /// `t` is the type space.
     /// `s` is the self space.
-    /// `a` is the assoc space.
     /// `f` is the fn space.
     pub fn new(t: Vec<T>, s: Vec<T>, f: Vec<T>) -> VecPerParamSpace<T> {
         let type_limit = t.len();
@@ -289,7 +289,7 @@ impl<T> VecPerParamSpace<T> {
         }
     }
 
-    fn new_internal(content: Vec<T>, type_limit: uint, self_limit: uint)
+    fn new_internal(content: Vec<T>, type_limit: usize, self_limit: usize)
                     -> VecPerParamSpace<T>
     {
         VecPerParamSpace {
@@ -317,7 +317,7 @@ impl<T> VecPerParamSpace<T> {
     ///
     /// Unlike the `extend` method in `Vec`, this should not be assumed
     /// to be a cheap operation (even when amortized over many calls).
-    pub fn extend<I:Iterator<Item=T>>(&mut self, space: ParamSpace, mut values: I) {
+    pub fn extend<I:Iterator<Item=T>>(&mut self, space: ParamSpace, values: I) {
         // This could be made more efficient, obviously.
         for item in values {
             self.push(space, item);
@@ -342,7 +342,7 @@ impl<T> VecPerParamSpace<T> {
         }
     }
 
-    pub fn truncate(&mut self, space: ParamSpace, len: uint) {
+    pub fn truncate(&mut self, space: ParamSpace, len: usize) {
         // FIXME (#15435): slow; O(n^2); could enhance vec to make it O(n).
         while self.len(space) > len {
             self.pop(space);
@@ -352,7 +352,7 @@ impl<T> VecPerParamSpace<T> {
     pub fn replace(&mut self, space: ParamSpace, elems: Vec<T>) {
         // FIXME (#15435): slow; O(n^2); could enhance vec to make it O(n).
         self.truncate(space, 0);
-        for t in elems.into_iter() {
+        for t in elems {
             self.push(space, t);
         }
     }
@@ -360,10 +360,10 @@ impl<T> VecPerParamSpace<T> {
     pub fn get_self<'a>(&'a self) -> Option<&'a T> {
         let v = self.get_slice(SelfSpace);
         assert!(v.len() <= 1);
-        if v.len() == 0 { None } else { Some(&v[0]) }
+        if v.is_empty() { None } else { Some(&v[0]) }
     }
 
-    pub fn len(&self, space: ParamSpace) -> uint {
+    pub fn len(&self, space: ParamSpace) -> usize {
         self.get_slice(space).len()
     }
 
@@ -383,13 +383,13 @@ impl<T> VecPerParamSpace<T> {
 
     pub fn opt_get<'a>(&'a self,
                        space: ParamSpace,
-                       index: uint)
+                       index: usize)
                        -> Option<&'a T> {
         let v = self.get_slice(space);
         if index < v.len() { Some(&v[index]) } else { None }
     }
 
-    pub fn get<'a>(&'a self, space: ParamSpace, index: uint) -> &'a T {
+    pub fn get<'a>(&'a self, space: ParamSpace, index: usize) -> &'a T {
         &self.get_slice(space)[index]
     }
 
@@ -406,7 +406,7 @@ impl<T> VecPerParamSpace<T> {
     }
 
     pub fn as_slice(&self) -> &[T] {
-        self.content.as_slice()
+        &self.content
     }
 
     pub fn into_vec(self) -> Vec<T> {
@@ -440,7 +440,7 @@ impl<T> VecPerParamSpace<T> {
     }
 
     pub fn map_enumerated<U, P>(&self, pred: P) -> VecPerParamSpace<U> where
-        P: FnMut((ParamSpace, uint, &T)) -> U,
+        P: FnMut((ParamSpace, usize, &T)) -> U,
     {
         let result = self.iter_enumerated().map(pred).collect();
         VecPerParamSpace::new_internal(result,
@@ -486,8 +486,8 @@ impl<T> VecPerParamSpace<T> {
 #[derive(Clone)]
 pub struct EnumeratedItems<'a,T:'a> {
     vec: &'a VecPerParamSpace<T>,
-    space_index: uint,
-    elem_index: uint
+    space_index: usize,
+    elem_index: usize
 }
 
 impl<'a,T> EnumeratedItems<'a,T> {
@@ -510,9 +510,9 @@ impl<'a,T> EnumeratedItems<'a,T> {
 }
 
 impl<'a,T> Iterator for EnumeratedItems<'a,T> {
-    type Item = (ParamSpace, uint, &'a T);
+    type Item = (ParamSpace, usize, &'a T);
 
-    fn next(&mut self) -> Option<(ParamSpace, uint, &'a T)> {
+    fn next(&mut self) -> Option<(ParamSpace, usize, &'a T)> {
         let spaces = ParamSpace::all();
         if self.space_index < spaces.len() {
             let space = spaces[self.space_index];
@@ -528,6 +528,25 @@ impl<'a,T> Iterator for EnumeratedItems<'a,T> {
         }
     }
 }
+
+impl<T> IntoIterator for VecPerParamSpace<T> {
+    type Item = T;
+    type IntoIter = IntoIter<T>;
+
+    fn into_iter(self) -> IntoIter<T> {
+        self.into_vec().into_iter()
+    }
+}
+
+impl<'a,T> IntoIterator for &'a VecPerParamSpace<T> {
+    type Item = &'a T;
+    type IntoIter = Iter<'a, T>;
+
+    fn into_iter(self) -> Iter<'a, T> {
+        self.as_slice().into_iter()
+    }
+}
+
 
 ///////////////////////////////////////////////////////////////////////////
 // Public trait `Subst`
@@ -578,7 +597,7 @@ struct SubstFolder<'a, 'tcx: 'a> {
     root_ty: Option<Ty<'tcx>>,
 
     // Depth of type stack
-    ty_stack_depth: uint,
+    ty_stack_depth: usize,
 
     // Number of region binders we have passed through while doing the substitution
     region_binders_passed: u32,
@@ -602,11 +621,11 @@ impl<'a, 'tcx> TypeFolder<'tcx> for SubstFolder<'a, 'tcx> {
         // regions that appear in a function signature is done using
         // the specialized routine `ty::replace_late_regions()`.
         match r {
-            ty::ReEarlyBound(_, space, i, region_name) => {
+            ty::ReEarlyBound(data) => {
                 match self.substs.regions {
                     ErasedRegions => ty::ReStatic,
                     NonerasedRegions(ref regions) =>
-                        match regions.opt_get(space, i as uint) {
+                        match regions.opt_get(data.space, data.index as usize) {
                             Some(&r) => {
                                 self.shift_region_through_binders(r)
                             }
@@ -615,11 +634,12 @@ impl<'a, 'tcx> TypeFolder<'tcx> for SubstFolder<'a, 'tcx> {
                                 self.tcx().sess.span_bug(
                                     span,
                                     &format!("Type parameter out of range \
-                                     when substituting in region {} (root type={}) \
-                                     (space={:?}, index={})",
-                                    region_name.as_str(),
-                                    self.root_ty.repr(self.tcx()),
-                                    space, i)[]);
+                                              when substituting in region {} (root type={}) \
+                                              (space={:?}, index={})",
+                                             data.name.as_str(),
+                                             self.root_ty.repr(self.tcx()),
+                                             data.space,
+                                             data.index));
                             }
                         }
                 }
@@ -662,7 +682,7 @@ impl<'a, 'tcx> TypeFolder<'tcx> for SubstFolder<'a, 'tcx> {
 impl<'a,'tcx> SubstFolder<'a,'tcx> {
     fn ty_for_param(&self, p: ty::ParamTy, source_ty: Ty<'tcx>) -> Ty<'tcx> {
         // Look up the type in the substitutions. It really should be in there.
-        let opt_ty = self.substs.types.opt_get(p.space, p.idx as uint);
+        let opt_ty = self.substs.types.opt_get(p.space, p.idx as usize);
         let ty = match opt_ty {
             Some(t) => *t,
             None => {
@@ -676,7 +696,7 @@ impl<'a,'tcx> SubstFolder<'a,'tcx> {
                             p.space,
                             p.idx,
                             self.root_ty.repr(self.tcx()),
-                            self.substs.repr(self.tcx()))[]);
+                            self.substs.repr(self.tcx())));
             }
         };
 

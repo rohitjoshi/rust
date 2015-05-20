@@ -8,6 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// pretty-expanded FIXME #23616
+
 macro_rules! vec [
     ($($e:expr),*) => ({
         let mut _temp = ::std::vec::Vec::new();
@@ -17,5 +19,5 @@ macro_rules! vec [
 ];
 
 pub fn main() {
-    let my_vec = vec![1i, 2, 3, 4, 5];
+    let my_vec = vec![1, 2, 3, 4, 5];
 }

@@ -8,8 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[derive(PartialEq, Show)]
-struct Foo(int, int, String);
+#[derive(PartialEq, Debug)]
+struct Foo(isize, isize, String);
 
 pub fn main() {
   let a1 = Foo(5, 6, "abc".to_string());

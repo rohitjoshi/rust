@@ -13,10 +13,10 @@
 
 use std::ops;
 
-#[derive(Show,PartialEq,Eq)]
+#[derive(Debug,PartialEq,Eq)]
 struct Point {
-    x: int,
-    y: int
+    x: isize,
+    y: isize
 }
 
 impl ops::Add for Point {
@@ -27,10 +27,10 @@ impl ops::Add for Point {
     }
 }
 
-impl ops::Add<int> for Point {
+impl ops::Add<isize> for Point {
     type Output = Point;
 
-    fn add(self, other: int) -> Point {
+    fn add(self, other: isize) -> Point {
         Point {x: self.x + other,
                y: self.y + other}
     }

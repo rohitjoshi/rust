@@ -8,7 +8,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// ignore-android: FIXME(#10381)
 // min-lldb-version: 310
 
 // compile-flags:-g
@@ -58,9 +57,9 @@ impl Drop for StructWithDestructor {
 
 fn main() {
 
-    let unique = box StructWithSomePadding { x: 99, y: 999, z: 9999, w: 99999 };
+    let unique: Box<_> = box StructWithSomePadding { x: 99, y: 999, z: 9999, w: 99999 };
 
-    let unique_dtor = box StructWithDestructor { x: 77, y: 777, z: 7777, w: 77777 };
+    let unique_dtor: Box<_> = box StructWithDestructor { x: 77, y: 777, z: 7777, w: 77777 };
     zzz(); // #break
 }
 

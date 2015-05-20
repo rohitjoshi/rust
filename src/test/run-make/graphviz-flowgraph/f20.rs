@@ -9,6 +9,6 @@
 // except according to those terms.
 
 pub fn expr_index_20() {
-    let v = [2us, 0us, 20us];
-    v[20us];
+    let v = [2, 0, 20];
+    v[20];
 }

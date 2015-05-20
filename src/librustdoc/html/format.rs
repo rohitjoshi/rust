@@ -10,7 +10,7 @@
 
 //! HTML formatting module
 //!
-//! This module contains a large number of `fmt::String` implementations for
+//! This module contains a large number of `fmt::Display` implementations for
 //! various types in `rustdoc::clean`. These implementations all currently
 //! assume that HTML output is desired, although it may be possible to redesign
 //! them in the future to instead emit any format desired.
@@ -18,41 +18,38 @@
 use std::fmt;
 use std::iter::repeat;
 
+use syntax::abi::Abi;
 use syntax::ast;
 use syntax::ast_util;
 
 use clean;
-use stability_summary::ModuleSummary;
 use html::item_type::ItemType;
 use html::render;
 use html::render::{cache, CURRENT_LOCATION_KEY};
 
 /// Helper to render an optional visibility with a space after it (if the
 /// visibility is preset)
-#[derive(Copy)]
+#[derive(Copy, Clone)]
 pub struct VisSpace(pub Option<ast::Visibility>);
 /// Similarly to VisSpace, this structure is used to render a function style with a
 /// space after it.
-#[derive(Copy)]
+#[derive(Copy, Clone)]
 pub struct UnsafetySpace(pub ast::Unsafety);
 /// Wrapper struct for properly emitting a method declaration.
 pub struct Method<'a>(pub &'a clean::SelfTy, pub &'a clean::FnDecl);
 /// Similar to VisSpace, but used for mutability
-#[derive(Copy)]
+#[derive(Copy, Clone)]
 pub struct MutableSpace(pub clean::Mutability);
 /// Similar to VisSpace, but used for mutability
-#[derive(Copy)]
+#[derive(Copy, Clone)]
 pub struct RawMutableSpace(pub clean::Mutability);
-/// Wrapper struct for properly emitting the stability level.
-pub struct Stability<'a>(pub &'a Option<clean::Stability>);
-/// Wrapper struct for emitting the stability level concisely.
-pub struct ConciseStability<'a>(pub &'a Option<clean::Stability>);
 /// Wrapper struct for emitting a where clause from Generics.
 pub struct WhereClause<'a>(pub &'a clean::Generics);
 /// Wrapper struct for emitting type parameter bounds.
 pub struct TyParamBounds<'a>(pub &'a [clean::TyParamBound]);
 /// Wrapper struct for emitting a comma-separated list of items
 pub struct CommaSep<'a, T: 'a>(pub &'a [T]);
+pub struct AbiSpace(pub Abi);
 
 impl VisSpace {
     pub fn get(&self) -> Option<ast::Visibility> {
@@ -91,7 +88,7 @@ impl<'a> fmt::Display for TyParamBounds<'a> {
 
 impl fmt::Display for clean::Generics {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.lifetimes.len() == 0 && self.type_params.len() == 0 { return Ok(()) }
+        if self.lifetimes.is_empty() && self.type_params.is_empty() { return Ok(()) }
         try!(f.write_str("&lt;"));
 
         for (i, life) in self.lifetimes.iter().enumerate() {
@@ -101,18 +98,18 @@ impl fmt::Display for clean::Generics {
             try!(write!(f, "{}", *life));
         }
 
-        if self.type_params.len() > 0 {
-            if self.lifetimes.len() > 0 {
+        if !self.type_params.is_empty() {
+            if !self.lifetimes.is_empty() {
                 try!(f.write_str(", "));
             }
             for (i, tp) in self.type_params.iter().enumerate() {
                 if i > 0 {
                     try!(f.write_str(", "))
                 }
-                try!(f.write_str(tp.name.as_slice()));
+                try!(f.write_str(&tp.name));
 
-                if tp.bounds.len() > 0 {
-                    try!(write!(f, ": {}", TyParamBounds(tp.bounds.as_slice())));
+                if !tp.bounds.is_empty() {
+                    try!(write!(f, ": {}", TyParamBounds(&tp.bounds)));
                 }
 
                 match tp.default {
@@ -129,7 +126,7 @@ impl fmt::Display for clean::Generics {
 impl<'a> fmt::Display for WhereClause<'a> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let &WhereClause(gens) = self;
-        if gens.where_predicates.len() == 0 {
+        if gens.where_predicates.is_empty() {
             return Ok(());
         }
         try!(f.write_str(" <span class='where'>where "));
@@ -139,7 +136,7 @@ impl<'a> fmt::Display for WhereClause<'a> {
             }
             match pred {
                 &clean::WherePredicate::BoundPredicate { ref ty, ref bounds } => {
-                    let bounds = bounds.as_slice();
+                    let bounds = bounds;
                     try!(write!(f, "{}: {}", ty, TyParamBounds(bounds)));
                 }
                 &clean::WherePredicate::RegionPredicate { ref lifetime,
@@ -172,7 +169,7 @@ impl fmt::Display for clean::Lifetime {
 
 impl fmt::Display for clean::PolyTrait {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.lifetimes.len() > 0 {
+        if !self.lifetimes.is_empty() {
             try!(f.write_str("for&lt;"));
             for (i, lt) in self.lifetimes.iter().enumerate() {
                 if i > 0 {
@@ -209,24 +206,24 @@ impl fmt::Display for clean::PathParameters {
             clean::PathParameters::AngleBracketed {
                 ref lifetimes, ref types, ref bindings
             } => {
-                if lifetimes.len() > 0 || types.len() > 0 || bindings.len() > 0 {
+                if !lifetimes.is_empty() || !types.is_empty() || !bindings.is_empty() {
                     try!(f.write_str("&lt;"));
                     let mut comma = false;
-                    for lifetime in lifetimes.iter() {
+                    for lifetime in lifetimes {
                         if comma {
                             try!(f.write_str(", "));
                         }
                         comma = true;
                         try!(write!(f, "{}", *lifetime));
                     }
-                    for ty in types.iter() {
+                    for ty in types {
                         if comma {
                             try!(f.write_str(", "));
                         }
                         comma = true;
                         try!(write!(f, "{}", *ty));
                     }
-                    for binding in bindings.iter() {
+                    for binding in bindings {
                         if comma {
                             try!(f.write_str(", "));
                         }
@@ -239,7 +236,7 @@ impl fmt::Display for clean::PathParameters {
             clean::PathParameters::Parenthesized { ref inputs, ref output } => {
                 try!(f.write_str("("));
                 let mut comma = false;
-                for ty in inputs.iter() {
+                for ty in inputs {
                     if comma {
                         try!(f.write_str(", "));
                     }
@@ -259,7 +256,7 @@ impl fmt::Display for clean::PathParameters {
 
 impl fmt::Display for clean::PathSegment {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        try!(f.write_str(self.name.as_slice()));
+        try!(f.write_str(&self.name));
         write!(f, "{}", self.params)
     }
 }
@@ -280,49 +277,47 @@ impl fmt::Display for clean::Path {
     }
 }
 
-/// Used when rendering a `ResolvedPath` structure. This invokes the `path`
-/// rendering function with the necessary arguments for linking to a local path.
-fn resolved_path(w: &mut fmt::Formatter, did: ast::DefId, p: &clean::Path,
-                 print_all: bool) -> fmt::Result {
-    path(w, p, print_all,
-        |cache, loc| {
-            if ast_util::is_local(did) || cache.inlined.contains(&did) {
-                Some(repeat("../").take(loc.len()).collect::<String>())
-            } else {
-                match cache.extern_locations[did.krate] {
-                    render::Remote(ref s) => Some(s.to_string()),
-                    render::Local => {
-                        Some(repeat("../").take(loc.len()).collect::<String>())
-                    }
-                    render::Unknown => None,
-                }
-            }
-        },
-        |cache| {
-            match cache.paths.get(&did) {
-                None => None,
-                Some(&(ref fqp, shortty)) => Some((fqp.clone(), shortty))
-            }
-        })
+pub fn href(did: ast::DefId) -> Option<(String, ItemType, Vec<String>)> {
+    let cache = cache();
+    let loc = CURRENT_LOCATION_KEY.with(|l| l.borrow().clone());
+    let &(ref fqp, shortty) = match cache.paths.get(&did) {
+        Some(p) => p,
+        None => return None,
+    };
+    let mut url = if ast_util::is_local(did) || cache.inlined.contains(&did) {
+        repeat("../").take(loc.len()).collect::<String>()
+    } else {
+        match cache.extern_locations[&did.krate] {
+            (_, render::Remote(ref s)) => s.to_string(),
+            (_, render::Local) => repeat("../").take(loc.len()).collect(),
+            (_, render::Unknown) => return None,
+        }
+    };
+    for component in &fqp[..fqp.len() - 1] {
+        url.push_str(component);
+        url.push_str("/");
+    }
+    match shortty {
+        ItemType::Module => {
+            url.push_str(fqp.last().unwrap());
+            url.push_str("/index.html");
+        }
+        _ => {
+            url.push_str(shortty.to_static_str());
+            url.push_str(".");
+            url.push_str(fqp.last().unwrap());
+            url.push_str(".html");
+        }
+    }
+    Some((url, shortty, fqp.to_vec()))
 }
 
-fn path<F, G>(w: &mut fmt::Formatter,
-              path: &clean::Path,
-              print_all: bool,
-              root: F,
-              info: G)
-              -> fmt::Result where
-    F: FnOnce(&render::Cache, &[String]) -> Option<String>,
-    G: FnOnce(&render::Cache) -> Option<(Vec<String>, ItemType)>,
-{
-    // The generics will get written to both the title and link
+/// Used when rendering a `ResolvedPath` structure. This invokes the `path`
+/// rendering function with the necessary arguments for linking to a local path.
+fn resolved_path(w: &mut fmt::Formatter, did: ast::DefId, path: &clean::Path,
+                 print_all: bool) -> fmt::Result {
     let last = path.segments.last().unwrap();
-    let generics = format!("{}", last.params);
-
-    let loc = CURRENT_LOCATION_KEY.with(|l| l.borrow().clone());
-    let cache = cache();
-    let abs_root = root(&*cache, loc.as_slice());
-    let rel_root = match path.segments[0].name.as_slice() {
+    let rel_root = match &*path.segments[0].name {
         "self" => Some("./".to_string()),
         _ => None,
     };
@@ -331,60 +326,36 @@ fn path<F, G>(w: &mut fmt::Formatter,
         let amt = path.segments.len() - 1;
         match rel_root {
             Some(root) => {
-                let mut root = String::from_str(root.as_slice());
-                for seg in path.segments[..amt].iter() {
-                    if "super" == seg.name ||
-                            "self" == seg.name {
+                let mut root = String::from_str(&root);
+                for seg in &path.segments[..amt] {
+                    if "super" == seg.name || "self" == seg.name {
                         try!(write!(w, "{}::", seg.name));
                     } else {
-                        root.push_str(seg.name.as_slice());
+                        root.push_str(&seg.name);
                         root.push_str("/");
                         try!(write!(w, "<a class='mod'
                                             href='{}index.html'>{}</a>::",
-                                      root.as_slice(),
+                                      root,
                                       seg.name));
                     }
                 }
             }
             None => {
-                for seg in path.segments[..amt].iter() {
+                for seg in &path.segments[..amt] {
                     try!(write!(w, "{}::", seg.name));
                 }
             }
         }
     }
 
-    match info(&*cache) {
-        // This is a documented path, link to it!
-        Some((ref fqp, shortty)) if abs_root.is_some() => {
-            let mut url = String::from_str(abs_root.unwrap().as_slice());
-            let to_link = &fqp[..fqp.len() - 1];
-            for component in to_link.iter() {
-                url.push_str(component.as_slice());
-                url.push_str("/");
-            }
-            match shortty {
-                ItemType::Module => {
-                    url.push_str(fqp.last().unwrap().as_slice());
-                    url.push_str("/index.html");
-                }
-                _ => {
-                    url.push_str(shortty.to_static_str());
-                    url.push_str(".");
-                    url.push_str(fqp.last().unwrap().as_slice());
-                    url.push_str(".html");
-                }
-            }
-
+    match href(did) {
+        Some((url, shortty, fqp)) => {
             try!(write!(w, "<a class='{}' href='{}' title='{}'>{}</a>",
                           shortty, url, fqp.connect("::"), last.name));
         }
-
-        _ => {
-            try!(write!(w, "{}", last.name));
-        }
+        _ => try!(write!(w, "{}", last.name)),
     }
-    try!(write!(w, "{}", generics.as_slice()));
+    try!(write!(w, "{}", last.params));
     Ok(())
 }
 
@@ -403,17 +374,17 @@ fn primitive_link(f: &mut fmt::Formatter,
             needs_termination = true;
         }
         Some(&cnum) => {
-            let path = &m.paths[ast::DefId {
+            let path = &m.paths[&ast::DefId {
                 krate: cnum,
                 node: ast::CRATE_NODE_ID,
             }];
-            let loc = match m.extern_locations[cnum] {
-                render::Remote(ref s) => Some(s.to_string()),
-                render::Local => {
+            let loc = match m.extern_locations[&cnum] {
+                (_, render::Remote(ref s)) => Some(s.to_string()),
+                (_, render::Local) => {
                     let len = CURRENT_LOCATION_KEY.with(|s| s.borrow().len());
                     Some(repeat("../").take(len).collect::<String>())
                 }
-                render::Unknown => None,
+                (_, render::Unknown) => None,
             };
             match loc {
                 Some(root) => {
@@ -440,7 +411,7 @@ fn tybounds(w: &mut fmt::Formatter,
             typarams: &Option<Vec<clean::TyParamBound> >) -> fmt::Result {
     match *typarams {
         Some(ref params) => {
-            for param in params.iter() {
+            for param in params {
                 try!(write!(w, " + "));
                 try!(write!(w, "{}", *param));
             }
@@ -453,14 +424,12 @@ fn tybounds(w: &mut fmt::Formatter,
 impl fmt::Display for clean::Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            clean::TyParamBinder(id) => {
-                f.write_str(cache().typarams[ast_util::local_def(id)].as_slice())
-            }
             clean::Generic(ref name) => {
-                f.write_str(name.as_slice())
+                f.write_str(name)
             }
             clean::ResolvedPath{ did, ref typarams, ref path } => {
-                try!(resolved_path(f, did, path, false));
+                // Paths like Self::Output should be rendered with all segments
+                try!(resolved_path(f, did, path, path.segments[0].name == "Self"));
                 tybounds(f, typarams)
             }
             clean::Infer => write!(f, "_"),
@@ -468,7 +437,7 @@ impl fmt::Display for clean::Type {
             clean::BareFunction(ref decl) => {
                 write!(f, "{}{}fn{}{}",
                        UnsafetySpace(decl.unsafety),
-                       match decl.abi.as_slice() {
+                       match &*decl.abi {
                            "" => " extern ".to_string(),
                            "\"Rust\"" => "".to_string(),
                            s => format!(" extern {} ", s)
@@ -478,22 +447,22 @@ impl fmt::Display for clean::Type {
             }
             clean::Tuple(ref typs) => {
                 primitive_link(f, clean::PrimitiveTuple,
-                               match typs.as_slice() {
+                               &*match &**typs {
                                     [ref one] => format!("({},)", one),
-                                    many => format!("({})",
-                                                    CommaSep(many.as_slice()))
-                               }.as_slice())
+                                    many => format!("({})", CommaSep(&many)),
+                               })
             }
             clean::Vector(ref t) => {
-                primitive_link(f, clean::Slice, format!("[{}]", **t).as_slice())
+                primitive_link(f, clean::Slice, &format!("[{}]", **t))
             }
             clean::FixedVector(ref t, ref s) => {
-                primitive_link(f, clean::Slice,
-                               format!("[{}; {}]", **t, *s).as_slice())
+                primitive_link(f, clean::PrimitiveType::Array,
+                               &format!("[{}; {}]", **t, *s))
             }
             clean::Bottom => f.write_str("!"),
             clean::RawPointer(m, ref t) => {
-                write!(f, "*{}{}", RawMutableSpace(m), **t)
+                primitive_link(f, clean::PrimitiveType::PrimitiveRawPointer,
+                               &format!("*{}{}", RawMutableSpace(m), **t))
             }
             clean::BorrowedRef{ lifetime: ref l, mutability, type_: ref ty} => {
                 let lt = match *l {
@@ -506,10 +475,10 @@ impl fmt::Display for clean::Type {
                         match **bt {
                             clean::Generic(_) =>
                                 primitive_link(f, clean::Slice,
-                                    format!("&amp;{}{}[{}]", lt, m, **bt).as_slice()),
+                                    &format!("&amp;{}{}[{}]", lt, m, **bt)),
                             _ => {
                                 try!(primitive_link(f, clean::Slice,
-                                    format!("&amp;{}{}[", lt, m).as_slice()));
+                                    &format!("&amp;{}{}[", lt, m)));
                                 try!(write!(f, "{}", **bt));
                                 primitive_link(f, clean::Slice, "]")
                             }
@@ -529,6 +498,29 @@ impl fmt::Display for clean::Type {
                 }
                 Ok(())
             }
+            // It's pretty unsightly to look at `<A as B>::C` in output, and
+            // we've got hyperlinking on our side, so try to avoid longer
+            // notation as much as possible by making `C` a hyperlink to trait
+            // `B` to disambiguate.
+            //
+            // FIXME: this is still a lossy conversion and there should probably
+            //        be a better way of representing this in general? Most of
+            //        the ugliness comes from inlining across crates where
+            //        everything comes in as a fully resolved QPath (hard to
+            //        look at).
+            clean::QPath {
+                ref name,
+                ref self_type,
+                trait_: box clean::ResolvedPath { did, ref typarams, .. },
+            } => {
+                try!(write!(f, "{}::", self_type));
+                let path = clean::Path::singleton(name.clone());
+                try!(resolved_path(f, did, &path, false));
+
+                // FIXME: `typarams` are not rendered, and this seems bad?
+                drop(typarams);
+                Ok(())
+            }
             clean::QPath { ref name, ref self_type, ref trait_ } => {
                 write!(f, "&lt;{} as {}&gt;::{}", self_type, trait_, name)
             }
@@ -543,7 +535,7 @@ impl fmt::Display for clean::Arguments {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for (i, input) in self.values.iter().enumerate() {
             if i > 0 { try!(write!(f, ", ")); }
-            if input.name.len() > 0 {
+            if !input.name.is_empty() {
                 try!(write!(f, "{}: ", input.name));
             }
             try!(write!(f, "{}", input.type_));
@@ -577,23 +569,21 @@ impl<'a> fmt::Display for Method<'a> {
             clean::SelfStatic => {},
             clean::SelfValue => args.push_str("self"),
             clean::SelfBorrowed(Some(ref lt), mtbl) => {
-                args.push_str(format!("&amp;{} {}self", *lt,
-                                      MutableSpace(mtbl)).as_slice());
+                args.push_str(&format!("&amp;{} {}self", *lt, MutableSpace(mtbl)));
             }
             clean::SelfBorrowed(None, mtbl) => {
-                args.push_str(format!("&amp;{}self",
-                                      MutableSpace(mtbl)).as_slice());
+                args.push_str(&format!("&amp;{}self", MutableSpace(mtbl)));
             }
             clean::SelfExplicit(ref typ) => {
-                args.push_str(format!("self: {}", *typ).as_slice());
+                args.push_str(&format!("self: {}", *typ));
             }
         }
         for (i, input) in d.inputs.values.iter().enumerate() {
-            if i > 0 || args.len() > 0 { args.push_str(", "); }
-            if input.name.len() > 0 {
-                args.push_str(format!("{}: ", input.name).as_slice());
+            if i > 0 || !args.is_empty() { args.push_str(", "); }
+            if !input.name.is_empty() {
+                args.push_str(&format!("{}: ", input.name));
             }
-            args.push_str(format!("{}", input.type_).as_slice());
+            args.push_str(&format!("{}", input.type_));
         }
         write!(f, "({args}){arrow}", args = args, arrow = d.output)
     }
@@ -665,17 +655,7 @@ impl fmt::Display for clean::ViewListIdent {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.source {
             Some(did) => {
-                let path = clean::Path {
-                    global: false,
-                    segments: vec!(clean::PathSegment {
-                        name: self.name.clone(),
-                        params: clean::PathParameters::AngleBracketed {
-                            lifetimes: Vec::new(),
-                            types: Vec::new(),
-                            bindings: Vec::new()
-                        }
-                    })
-                };
+                let path = clean::Path::singleton(self.name.clone());
                 resolved_path(f, did, &path, false)
             }
             _ => write!(f, "{}", self.name),
@@ -707,113 +687,12 @@ impl fmt::Display for RawMutableSpace {
     }
 }
 
-impl<'a> fmt::Display for Stability<'a> {
+impl fmt::Display for AbiSpace {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let Stability(stab) = *self;
-        match *stab {
-            Some(ref stability) => {
-                write!(f, "<a class='stability {lvl}' title='{reason}'>{lvl}</a>",
-                       lvl = stability.level,
-                       reason = stability.text)
-            }
-            None => Ok(())
+        match self.0 {
+            Abi::Rust => Ok(()),
+            Abi::C => write!(f, "extern "),
+            abi => write!(f, "extern {} ", abi),
         }
-    }
-}
-
-impl<'a> fmt::Display for ConciseStability<'a> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let ConciseStability(stab) = *self;
-        match *stab {
-            Some(ref stability) => {
-                write!(f, "<a class='stability {lvl}' title='{lvl}{colon}{reason}'></a>",
-                       lvl = stability.level,
-                       colon = if stability.text.len() > 0 { ": " } else { "" },
-                       reason = stability.text)
-            }
-            None => {
-                write!(f, "<a class='stability Unmarked' title='No stability level'></a>")
-            }
-        }
-    }
-}
-
-impl fmt::Display for ModuleSummary {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fn fmt_inner<'a>(f: &mut fmt::Formatter,
-                         context: &mut Vec<&'a str>,
-                         m: &'a ModuleSummary)
-                     -> fmt::Result {
-            let cnt = m.counts;
-            let tot = cnt.total();
-            if tot == 0 { return Ok(()) }
-
-            context.push(m.name.as_slice());
-            let path = context.connect("::");
-
-            try!(write!(f, "<tr>"));
-            try!(write!(f, "<td><a href='{}'>{}</a></td>", {
-                            let mut url = context.slice_from(1).to_vec();
-                            url.push("index.html");
-                            url.connect("/")
-                        },
-                        path));
-            try!(write!(f, "<td class='summary-column'>"));
-            try!(write!(f, "<span class='summary Stable' \
-                            style='width: {:.4}%; display: inline-block'>&nbsp</span>",
-                        (100 * cnt.stable) as f64/tot as f64));
-            try!(write!(f, "<span class='summary Unstable' \
-                            style='width: {:.4}%; display: inline-block'>&nbsp</span>",
-                        (100 * cnt.unstable) as f64/tot as f64));
-            try!(write!(f, "<span class='summary Experimental' \
-                            style='width: {:.4}%; display: inline-block'>&nbsp</span>",
-                        (100 * cnt.experimental) as f64/tot as f64));
-            try!(write!(f, "<span class='summary Deprecated' \
-                            style='width: {:.4}%; display: inline-block'>&nbsp</span>",
-                        (100 * cnt.deprecated) as f64/tot as f64));
-            try!(write!(f, "<span class='summary Unmarked' \
-                            style='width: {:.4}%; display: inline-block'>&nbsp</span>",
-                        (100 * cnt.unmarked) as f64/tot as f64));
-            try!(write!(f, "</td></tr>"));
-
-            for submodule in m.submodules.iter() {
-                try!(fmt_inner(f, context, submodule));
-            }
-            context.pop();
-            Ok(())
-        }
-
-        let mut context = Vec::new();
-
-        let tot = self.counts.total();
-        let (stable, unstable, experimental, deprecated, unmarked) = if tot == 0 {
-            (0, 0, 0, 0, 0)
-        } else {
-            ((100 * self.counts.stable)/tot,
-             (100 * self.counts.unstable)/tot,
-             (100 * self.counts.experimental)/tot,
-             (100 * self.counts.deprecated)/tot,
-             (100 * self.counts.unmarked)/tot)
-        };
-
-        try!(write!(f,
-r"<h1 class='fqn'>Stability dashboard: crate <a class='mod' href='index.html'>{name}</a></h1>
-This dashboard summarizes the stability levels for all of the public modules of
-the crate, according to the total number of items at each level in the module and
-its children (percentages total for {name}):
-<blockquote>
-<a class='stability Stable'></a> stable ({}%),<br/>
-<a class='stability Unstable'></a> unstable ({}%),<br/>
-<a class='stability Experimental'></a> experimental ({}%),<br/>
-<a class='stability Deprecated'></a> deprecated ({}%),<br/>
-<a class='stability Unmarked'></a> unmarked ({}%)
-</blockquote>
-The counts do not include methods or trait
-implementations that are visible only through a re-exported type.",
-stable, unstable, experimental, deprecated, unmarked,
-name=self.name));
-        try!(write!(f, "<table>"));
-        try!(fmt_inner(f, &mut context, self));
-        write!(f, "</table>")
     }
 }

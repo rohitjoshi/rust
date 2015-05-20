@@ -10,13 +10,13 @@
 
 // error-pattern: requires `copy` lang_item
 
-#![feature(lang_items, start)]
+#![feature(lang_items, start, no_std)]
 #![no_std]
 
 #[lang = "sized"]
-trait Sized {}
+trait Sized { }
 
 #[start]
-fn main(_: int, _: *const *const u8) -> int {
+fn main(_: isize, _: *const *const u8) -> isize {
     0
 }

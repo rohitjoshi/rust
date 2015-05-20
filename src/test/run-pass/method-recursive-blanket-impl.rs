@@ -13,20 +13,22 @@
 // know not to stop at the blanket, we have to recursively evaluate
 // the `T:Foo` bound.
 
+// pretty-expanded FIXME #23616
+
 use std::marker::Sized;
 
 // Note: this must be generic for the problem to show up
 trait Foo<A> {
-    fn foo(&self);
+    fn foo(&self, a: A);
 }
 
 impl Foo<u8> for [u8] {
-    fn foo(&self) {}
+    fn foo(&self, a: u8) {}
 }
 
 impl<'a, A, T> Foo<A> for &'a T where T: Foo<A> {
-    fn foo(&self) {
-        Foo::foo(*self)
+    fn foo(&self, a: A) {
+        Foo::foo(*self, a)
     }
 }
 

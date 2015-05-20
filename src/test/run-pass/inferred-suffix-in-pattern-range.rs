@@ -8,15 +8,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+
 pub fn main() {
-    let x = 2i;
+    let x = 2;
     let x_message = match x {
       0 ... 1    => { "not many".to_string() }
       _          => { "lots".to_string() }
     };
     assert_eq!(x_message, "lots".to_string());
 
-    let y = 2i;
+    let y = 2;
     let y_message = match y {
       0 ... 1    => { "not many".to_string() }
       _          => { "lots".to_string() }

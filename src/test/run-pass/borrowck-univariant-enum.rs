@@ -9,13 +9,13 @@
 // except according to those terms.
 
 
+
 use std::cell::Cell;
 
+#[derive(Copy, Clone)]
 enum newtype {
-    newvar(int)
+    newvar(isize)
 }
-
-impl Copy for newtype {}
 
 pub fn main() {
 

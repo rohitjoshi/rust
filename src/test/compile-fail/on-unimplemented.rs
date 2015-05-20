@@ -12,7 +12,8 @@
 #![feature(on_unimplemented)]
 
 #[rustc_on_unimplemented = "test error `{Self}` with `{Bar}` `{Baz}` `{Quux}`"]
-trait Foo<Bar, Baz, Quux>{}
+trait Foo<Bar, Baz, Quux>
+{}
 
 fn foobar<U: Clone, T: Foo<u8, U, u32>>() -> T {
 

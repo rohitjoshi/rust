@@ -8,16 +8,17 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// pretty-expanded FIXME #23616
+
 #![allow(unknown_features)]
 #![feature(box_syntax)]
 
+#[derive(Copy, Clone)]
 enum side { mayo, catsup, vinegar }
+#[derive(Copy, Clone)]
 enum order { hamburger, fries(side), shake }
+#[derive(Copy, Clone)]
 enum meal { to_go(order), for_here(order) }
-
-impl Copy for side {}
-impl Copy for order {}
-impl Copy for meal {}
 
 fn foo(m: Box<meal>, cond: bool) {
     match *m {

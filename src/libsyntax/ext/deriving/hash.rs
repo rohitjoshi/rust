@@ -8,68 +8,63 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use ast::{MetaItem, Item, Expr, MutMutable};
+use ast::{MetaItem, Expr, MutMutable};
 use codemap::Span;
-use ext::base::ExtCtxt;
+use ext::base::{ExtCtxt, Annotatable};
 use ext::build::AstBuilder;
 use ext::deriving::generic::*;
 use ext::deriving::generic::ty::*;
-use parse::token::InternedString;
 use ptr::P;
 
-pub fn expand_deriving_hash<F>(cx: &mut ExtCtxt,
-                               span: Span,
-                               mitem: &MetaItem,
-                               item: &Item,
-                               push: F) where
-    F: FnOnce(P<Item>),
+pub fn expand_deriving_hash(cx: &mut ExtCtxt,
+                            span: Span,
+                            mitem: &MetaItem,
+                            item: Annotatable,
+                            push: &mut FnMut(Annotatable))
 {
 
-    let path = Path::new_(vec!("std", "hash", "Hash"), None,
-                          vec!(box Literal(Path::new_local("__S"))), true);
-    let generics = LifetimeBounds {
-        lifetimes: Vec::new(),
-        bounds: vec!(("__S",
-                      vec!(Path::new(vec!("std", "hash", "Writer")),
-                           Path::new(vec!("std", "hash", "Hasher"))))),
-    };
-    let args = Path::new_local("__S");
-    let inline = cx.meta_word(span, InternedString::new("inline"));
-    let attrs = vec!(cx.attribute(span, inline));
+    let path = Path::new_(pathvec_std!(cx, core::hash::Hash), None,
+                          vec!(), true);
+    let arg = Path::new_local("__H");
     let hash_trait_def = TraitDef {
         span: span,
         attributes: Vec::new(),
         path: path,
         additional_bounds: Vec::new(),
-        generics: generics,
+        generics: LifetimeBounds::empty(),
         methods: vec!(
             MethodDef {
                 name: "hash",
-                generics: LifetimeBounds::empty(),
+                generics: LifetimeBounds {
+                    lifetimes: Vec::new(),
+                    bounds: vec![("__H",
+                                  vec![path_std!(cx, core::hash::Hasher)])],
+                },
                 explicit_self: borrowed_explicit_self(),
-                args: vec!(Ptr(box Literal(args), Borrowed(None, MutMutable))),
+                args: vec!(Ptr(Box::new(Literal(arg)), Borrowed(None, MutMutable))),
                 ret_ty: nil_ty(),
-                attributes: attrs,
-                combine_substructure: combine_substructure(box |a, b, c| {
+                attributes: vec![],
+                is_unsafe: false,
+                combine_substructure: combine_substructure(Box::new(|a, b, c| {
                     hash_substructure(a, b, c)
-                })
+                }))
             }
         ),
         associated_types: Vec::new(),
     };
 
-    hash_trait_def.expand(cx, mitem, item, push);
+    hash_trait_def.expand(cx, mitem, &item, push);
 }
 
 fn hash_substructure(cx: &mut ExtCtxt, trait_span: Span, substr: &Substructure) -> P<Expr> {
-    let state_expr = match substr.nonself_args {
-        [ref state_expr] => state_expr,
+    let state_expr = match (substr.nonself_args.len(), substr.nonself_args.get(0)) {
+        (1, Some(o_f)) => o_f,
         _ => cx.span_bug(trait_span, "incorrect number of arguments in `derive(Hash)`")
     };
-    let call_hash = |&: span, thing_expr| {
+    let call_hash = |span, thing_expr| {
         let hash_path = {
             let strs = vec![
-                cx.ident_of("std"),
+                cx.ident_of_std("core"),
                 cx.ident_of("hash"),
                 cx.ident_of("Hash"),
                 cx.ident_of("hash"),
@@ -100,7 +95,7 @@ fn hash_substructure(cx: &mut ExtCtxt, trait_span: Span, substr: &Substructure) 
         _ => cx.span_bug(trait_span, "impossible substructure in `derive(Hash)`")
     };
 
-    for &FieldInfo { ref self_, span, .. } in fields.iter() {
+    for &FieldInfo { ref self_, span, .. } in fields {
         stmts.push(call_hash(span, self_.clone()));
     }
 

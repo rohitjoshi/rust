@@ -8,12 +8,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// pretty-expanded FIXME #23616
+
 use std::ascii::AsciiExt;
 
 static NAME: &'static str = "hello world";
 
 fn main() {
-    match NAME.to_ascii_lowercase().as_slice() {
+    match &*NAME.to_ascii_lowercase() {
         "foo" => {}
         _ => {}
     }

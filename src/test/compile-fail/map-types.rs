@@ -14,7 +14,10 @@ extern crate collections;
 
 use std::collections::HashMap;
 
-trait Map<K, V> {}
+trait Map<K, V>
+{
+    fn get(&self, k: K) -> V { panic!() }
+}
 
 impl<K, V> Map<K, V> for HashMap<K, V> {}
 
@@ -23,6 +26,7 @@ impl<K, V> Map<K, V> for HashMap<K, V> {}
 fn main() {
     let x: Box<HashMap<isize, isize>> = box HashMap::new();
     let x: Box<Map<isize, isize>> = x;
-    let y: Box<Map<usize, isize>> = box x;
+    // FIXME (#22405): Replace `Box::new` with `box` here when/if possible.
+    let y: Box<Map<usize, isize>> = Box::new(x);
     //~^ ERROR the trait `Map<usize, isize>` is not implemented
 }

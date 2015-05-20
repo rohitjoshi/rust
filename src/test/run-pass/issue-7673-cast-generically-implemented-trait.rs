@@ -8,6 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// pretty-expanded FIXME #23616
+
 /*
 
 #7673 Polymorphically creating traits barely works
@@ -19,7 +21,10 @@
 
 pub fn main() {}
 
-trait A {}
+trait A {
+    fn dummy(&self) { }
+}
+
 impl<T: 'static> A for T {}
 
 fn owned2<T: 'static>(a: Box<T>) { a as Box<A>; }

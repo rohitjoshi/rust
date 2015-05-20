@@ -8,7 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! The Rust prelude
+//! The Rust Prelude
 //!
 //! Because `std` is required by most serious Rust software, it is
 //! imported at the topmost level of every crate by default, as if the
@@ -19,7 +19,7 @@
 //! ```
 //!
 //! This means that the contents of std can be accessed from any context
-//! with the `std::` path prefix, as in `use std::vec`, `use std::task::spawn`,
+//! with the `std::` path prefix, as in `use std::vec`, `use std::thread::spawn`,
 //! etc.
 //!
 //! Additionally, `std` contains a `prelude` module that reexports many of the
@@ -35,7 +35,6 @@
 //! pervasive that it would be obnoxious to import for every use, particularly
 //! those that define methods on primitive types.
 
-#![stable]
+#![stable(feature = "rust1", since = "1.0.0")]
 
-#[stable]
 pub mod v1;

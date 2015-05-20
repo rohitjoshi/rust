@@ -12,18 +12,18 @@
 
 use core::prelude::*;
 use core::char;
-use core::int;
-use core::uint;
+use core::isize;
+use core::usize;
 
 use {Rand,Rng};
 
-impl Rand for int {
+impl Rand for isize {
     #[inline]
-    fn rand<R: Rng>(rng: &mut R) -> int {
-        if int::BITS == 32 {
-            rng.gen::<i32>() as int
+    fn rand<R: Rng>(rng: &mut R) -> isize {
+        if isize::BITS == 32 {
+            rng.gen::<i32>() as isize
         } else {
-            rng.gen::<i64>() as int
+            rng.gen::<i64>() as isize
         }
     }
 }
@@ -56,13 +56,13 @@ impl Rand for i64 {
     }
 }
 
-impl Rand for uint {
+impl Rand for usize {
     #[inline]
-    fn rand<R: Rng>(rng: &mut R) -> uint {
-        if uint::BITS == 32 {
-            rng.gen::<u32>() as uint
+    fn rand<R: Rng>(rng: &mut R) -> usize {
+        if usize::BITS == 32 {
+            rng.gen::<u32>() as usize
         } else {
-            rng.gen::<u64>() as uint
+            rng.gen::<u64>() as usize
         }
     }
 }
@@ -141,7 +141,7 @@ impl Rand for char {
     #[inline]
     fn rand<R: Rng>(rng: &mut R) -> char {
         // a char is 21 bits
-        static CHAR_MASK: u32 = 0x001f_ffff;
+        const CHAR_MASK: u32 = 0x001f_ffff;
         loop {
             // Rejection sampling. About 0.2% of numbers with at most
             // 21-bits are invalid codepoints (surrogates), so this
@@ -208,59 +208,6 @@ impl<T:Rand> Rand for Option<T> {
             Some(rng.gen())
         } else {
             None
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::prelude::v1::*;
-    use std::rand::{Rng, thread_rng, Open01, Closed01};
-
-    struct ConstantRng(u64);
-    impl Rng for ConstantRng {
-        fn next_u32(&mut self) -> u32 {
-            let ConstantRng(v) = *self;
-            v as u32
-        }
-        fn next_u64(&mut self) -> u64 {
-            let ConstantRng(v) = *self;
-            v
-        }
-    }
-
-    #[test]
-    fn floating_point_edge_cases() {
-        // the test for exact equality is correct here.
-        assert!(ConstantRng(0xffff_ffff).gen::<f32>() != 1.0);
-        assert!(ConstantRng(0xffff_ffff_ffff_ffff).gen::<f64>() != 1.0);
-    }
-
-    #[test]
-    fn rand_open() {
-        // this is unlikely to catch an incorrect implementation that
-        // generates exactly 0 or 1, but it keeps it sane.
-        let mut rng = thread_rng();
-        for _ in range(0u, 1_000) {
-            // strict inequalities
-            let Open01(f) = rng.gen::<Open01<f64>>();
-            assert!(0.0 < f && f < 1.0);
-
-            let Open01(f) = rng.gen::<Open01<f32>>();
-            assert!(0.0 < f && f < 1.0);
-        }
-    }
-
-    #[test]
-    fn rand_closed() {
-        let mut rng = thread_rng();
-        for _ in range(0u, 1_000) {
-            // strict inequalities
-            let Closed01(f) = rng.gen::<Closed01<f64>>();
-            assert!(0.0 <= f && f <= 1.0);
-
-            let Closed01(f) = rng.gen::<Closed01<f32>>();
-            assert!(0.0 <= f && f <= 1.0);
         }
     }
 }

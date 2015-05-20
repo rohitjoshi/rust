@@ -16,68 +16,68 @@ fn test_format_int() {
     // Formatting integers should select the right implementation based off
     // the type of the argument. Also, hex/octal/binary should be defined
     // for integers, but they shouldn't emit the negative sign.
-    assert!(format!("{}", 1is) == "1");
+    assert!(format!("{}", 1isize) == "1");
     assert!(format!("{}", 1i8) == "1");
     assert!(format!("{}", 1i16) == "1");
     assert!(format!("{}", 1i32) == "1");
     assert!(format!("{}", 1i64) == "1");
-    assert!(format!("{}", -1is) == "-1");
+    assert!(format!("{}", -1isize) == "-1");
     assert!(format!("{}", -1i8) == "-1");
     assert!(format!("{}", -1i16) == "-1");
     assert!(format!("{}", -1i32) == "-1");
     assert!(format!("{}", -1i64) == "-1");
-    assert!(format!("{:?}", 1is) == "1");
+    assert!(format!("{:?}", 1isize) == "1");
     assert!(format!("{:?}", 1i8) == "1");
     assert!(format!("{:?}", 1i16) == "1");
     assert!(format!("{:?}", 1i32) == "1");
     assert!(format!("{:?}", 1i64) == "1");
-    assert!(format!("{:b}", 1is) == "1");
+    assert!(format!("{:b}", 1isize) == "1");
     assert!(format!("{:b}", 1i8) == "1");
     assert!(format!("{:b}", 1i16) == "1");
     assert!(format!("{:b}", 1i32) == "1");
     assert!(format!("{:b}", 1i64) == "1");
-    assert!(format!("{:x}", 1is) == "1");
+    assert!(format!("{:x}", 1isize) == "1");
     assert!(format!("{:x}", 1i8) == "1");
     assert!(format!("{:x}", 1i16) == "1");
     assert!(format!("{:x}", 1i32) == "1");
     assert!(format!("{:x}", 1i64) == "1");
-    assert!(format!("{:X}", 1is) == "1");
+    assert!(format!("{:X}", 1isize) == "1");
     assert!(format!("{:X}", 1i8) == "1");
     assert!(format!("{:X}", 1i16) == "1");
     assert!(format!("{:X}", 1i32) == "1");
     assert!(format!("{:X}", 1i64) == "1");
-    assert!(format!("{:o}", 1is) == "1");
+    assert!(format!("{:o}", 1isize) == "1");
     assert!(format!("{:o}", 1i8) == "1");
     assert!(format!("{:o}", 1i16) == "1");
     assert!(format!("{:o}", 1i32) == "1");
     assert!(format!("{:o}", 1i64) == "1");
 
-    assert!(format!("{}", 1us) == "1");
+    assert!(format!("{}", 1usize) == "1");
     assert!(format!("{}", 1u8) == "1");
     assert!(format!("{}", 1u16) == "1");
     assert!(format!("{}", 1u32) == "1");
     assert!(format!("{}", 1u64) == "1");
-    assert!(format!("{:?}", 1us) == "1");
+    assert!(format!("{:?}", 1usize) == "1");
     assert!(format!("{:?}", 1u8) == "1");
     assert!(format!("{:?}", 1u16) == "1");
     assert!(format!("{:?}", 1u32) == "1");
     assert!(format!("{:?}", 1u64) == "1");
-    assert!(format!("{:b}", 1us) == "1");
+    assert!(format!("{:b}", 1usize) == "1");
     assert!(format!("{:b}", 1u8) == "1");
     assert!(format!("{:b}", 1u16) == "1");
     assert!(format!("{:b}", 1u32) == "1");
     assert!(format!("{:b}", 1u64) == "1");
-    assert!(format!("{:x}", 1us) == "1");
+    assert!(format!("{:x}", 1usize) == "1");
     assert!(format!("{:x}", 1u8) == "1");
     assert!(format!("{:x}", 1u16) == "1");
     assert!(format!("{:x}", 1u32) == "1");
     assert!(format!("{:x}", 1u64) == "1");
-    assert!(format!("{:X}", 1us) == "1");
+    assert!(format!("{:X}", 1usize) == "1");
     assert!(format!("{:X}", 1u8) == "1");
     assert!(format!("{:X}", 1u16) == "1");
     assert!(format!("{:X}", 1u32) == "1");
     assert!(format!("{:X}", 1u64) == "1");
-    assert!(format!("{:o}", 1us) == "1");
+    assert!(format!("{:o}", 1usize) == "1");
     assert!(format!("{:o}", 1u8) == "1");
     assert!(format!("{:o}", 1u16) == "1");
     assert!(format!("{:o}", 1u32) == "1");
@@ -125,14 +125,14 @@ fn test_format_int_flags() {
     assert!(format!("{:>8x}", 10) == "       a");
     assert!(format!("{:#08x}", 10) == "0x00000a");
     assert!(format!("{:08}", -10) == "-0000010");
-    assert!(format!("{:x}", -1u8) == "ff");
-    assert!(format!("{:X}", -1u8) == "FF");
-    assert!(format!("{:b}", -1u8) == "11111111");
-    assert!(format!("{:o}", -1u8) == "377");
-    assert!(format!("{:#x}", -1u8) == "0xff");
-    assert!(format!("{:#X}", -1u8) == "0xFF");
-    assert!(format!("{:#b}", -1u8) == "0b11111111");
-    assert!(format!("{:#o}", -1u8) == "0o377");
+    assert!(format!("{:x}", !0u8) == "ff");
+    assert!(format!("{:X}", !0u8) == "FF");
+    assert!(format!("{:b}", !0u8) == "11111111");
+    assert!(format!("{:o}", !0u8) == "377");
+    assert!(format!("{:#x}", !0u8) == "0xff");
+    assert!(format!("{:#X}", !0u8) == "0xFF");
+    assert!(format!("{:#b}", !0u8) == "0b11111111");
+    assert!(format!("{:#o}", !0u8) == "0o377");
 }
 
 #[test]
@@ -161,7 +161,7 @@ fn test_format_radix() {
 }
 
 #[test]
-#[should_fail]
+#[should_panic]
 fn test_radix_base_too_large() {
     let _ = radix(55, 37);
 }
@@ -169,85 +169,85 @@ fn test_radix_base_too_large() {
 mod u32 {
     use test::Bencher;
     use core::fmt::radix;
-    use std::rand::{weak_rng, Rng};
-    use std::old_io::util::NullWriter;
+    use std::__rand::{thread_rng, Rng};
+    use std::io::{Write, sink};
 
     #[bench]
     fn format_bin(b: &mut Bencher) {
-        let mut rng = weak_rng();
-        b.iter(|| { write!(&mut NullWriter, "{:b}", rng.gen::<u32>()) })
+        let mut rng = thread_rng();
+        b.iter(|| { write!(&mut sink(), "{:b}", rng.gen::<u32>()) })
     }
 
     #[bench]
     fn format_oct(b: &mut Bencher) {
-        let mut rng = weak_rng();
-        b.iter(|| { write!(&mut NullWriter, "{:o}", rng.gen::<u32>()) })
+        let mut rng = thread_rng();
+        b.iter(|| { write!(&mut sink(), "{:o}", rng.gen::<u32>()) })
     }
 
     #[bench]
     fn format_dec(b: &mut Bencher) {
-        let mut rng = weak_rng();
-        b.iter(|| { write!(&mut NullWriter, "{}", rng.gen::<u32>()) })
+        let mut rng = thread_rng();
+        b.iter(|| { write!(&mut sink(), "{}", rng.gen::<u32>()) })
     }
 
     #[bench]
     fn format_hex(b: &mut Bencher) {
-        let mut rng = weak_rng();
-        b.iter(|| { write!(&mut NullWriter, "{:x}", rng.gen::<u32>()) })
+        let mut rng = thread_rng();
+        b.iter(|| { write!(&mut sink(), "{:x}", rng.gen::<u32>()) })
     }
 
     #[bench]
     fn format_show(b: &mut Bencher) {
-        let mut rng = weak_rng();
-        b.iter(|| { write!(&mut NullWriter, "{:?}", rng.gen::<u32>()) })
+        let mut rng = thread_rng();
+        b.iter(|| { write!(&mut sink(), "{:?}", rng.gen::<u32>()) })
     }
 
     #[bench]
     fn format_base_36(b: &mut Bencher) {
-        let mut rng = weak_rng();
-        b.iter(|| { write!(&mut NullWriter, "{}", radix(rng.gen::<u32>(), 36)) })
+        let mut rng = thread_rng();
+        b.iter(|| { write!(&mut sink(), "{}", radix(rng.gen::<u32>(), 36)) })
     }
 }
 
 mod i32 {
     use test::Bencher;
     use core::fmt::radix;
-    use std::rand::{weak_rng, Rng};
-    use std::old_io::util::NullWriter;
+    use std::__rand::{thread_rng, Rng};
+    use std::io::{Write, sink};
 
     #[bench]
     fn format_bin(b: &mut Bencher) {
-        let mut rng = weak_rng();
-        b.iter(|| { write!(&mut NullWriter, "{:b}", rng.gen::<i32>()) })
+        let mut rng = thread_rng();
+        b.iter(|| { write!(&mut sink(), "{:b}", rng.gen::<i32>()) })
     }
 
     #[bench]
     fn format_oct(b: &mut Bencher) {
-        let mut rng = weak_rng();
-        b.iter(|| { write!(&mut NullWriter, "{:o}", rng.gen::<i32>()) })
+        let mut rng = thread_rng();
+        b.iter(|| { write!(&mut sink(), "{:o}", rng.gen::<i32>()) })
     }
 
     #[bench]
     fn format_dec(b: &mut Bencher) {
-        let mut rng = weak_rng();
-        b.iter(|| { write!(&mut NullWriter, "{}", rng.gen::<i32>()) })
+        let mut rng = thread_rng();
+        b.iter(|| { write!(&mut sink(), "{}", rng.gen::<i32>()) })
     }
 
     #[bench]
     fn format_hex(b: &mut Bencher) {
-        let mut rng = weak_rng();
-        b.iter(|| { write!(&mut NullWriter, "{:x}", rng.gen::<i32>()) })
+        let mut rng = thread_rng();
+        b.iter(|| { write!(&mut sink(), "{:x}", rng.gen::<i32>()) })
     }
 
     #[bench]
     fn format_show(b: &mut Bencher) {
-        let mut rng = weak_rng();
-        b.iter(|| { write!(&mut NullWriter, "{:?}", rng.gen::<i32>()) })
+        let mut rng = thread_rng();
+        b.iter(|| { write!(&mut sink(), "{:?}", rng.gen::<i32>()) })
     }
 
     #[bench]
     fn format_base_36(b: &mut Bencher) {
-        let mut rng = weak_rng();
-        b.iter(|| { write!(&mut NullWriter, "{}", radix(rng.gen::<i32>(), 36)) })
+        let mut rng = thread_rng();
+        b.iter(|| { write!(&mut sink(), "{}", radix(rng.gen::<i32>(), 36)) })
     }
 }

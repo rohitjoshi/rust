@@ -18,7 +18,7 @@ impl Foo for X {
     type Item = bool;
 }
 
-fn print_x(_: &Foo, extra: &str) {
+fn print_x(_: &Foo<Item=bool>, extra: &str) {
     println!("{}", extra);
 }
 

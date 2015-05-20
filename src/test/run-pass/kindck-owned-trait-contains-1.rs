@@ -8,6 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+
 #![allow(unknown_features)]
 #![feature(box_syntax)]
 
@@ -24,7 +25,7 @@ fn repeater<A:Clone + 'static>(v: Box<A>) -> Box<repeat<A>+'static> {
 }
 
 pub fn main() {
-    let x = 3i;
+    let x = 3;
     let y = repeater(box x);
     assert_eq!(x, y.get());
 }

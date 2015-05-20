@@ -29,76 +29,82 @@ use syntax::codemap::Span;
 pub trait RegionScope {
     fn anon_regions(&self,
                     span: Span,
-                    count: uint)
-                    -> Result<Vec<ty::Region>, Option<Vec<(String, uint)>>>;
+                    count: usize)
+                    -> Result<Vec<ty::Region>, Option<Vec<(String, usize)>>>;
 
-    fn default_region_bound(&self, span: Span) -> Option<ty::Region>;
+    /// If an object omits any explicit lifetime bound, and none can
+    /// be derived from the object traits, what should we use? If
+    /// `None` is returned, an explicit annotation is required.
+    fn object_lifetime_default(&self, span: Span) -> Option<ty::Region>;
 }
 
 // A scope in which all regions must be explicitly named. This is used
 // for types that appear in structs and so on.
-#[derive(Copy)]
+#[derive(Copy, Clone)]
 pub struct ExplicitRscope;
 
 impl RegionScope for ExplicitRscope {
-    fn default_region_bound(&self, _span: Span) -> Option<ty::Region> {
-        None
+    fn object_lifetime_default(&self, _span: Span) -> Option<ty::Region> {
+        Some(ty::ReStatic)
     }
 
     fn anon_regions(&self,
                     _span: Span,
-                    _count: uint)
-                    -> Result<Vec<ty::Region>, Option<Vec<(String, uint)>>> {
+                    _count: usize)
+                    -> Result<Vec<ty::Region>, Option<Vec<(String, usize)>>> {
         Err(None)
     }
 }
 
 // Same as `ExplicitRscope`, but provides some extra information for diagnostics
-pub struct UnelidableRscope(Vec<(String, uint)>);
+pub struct UnelidableRscope(Vec<(String, usize)>);
 
 impl UnelidableRscope {
-    pub fn new(v: Vec<(String, uint)>) -> UnelidableRscope {
+    pub fn new(v: Vec<(String, usize)>) -> UnelidableRscope {
         UnelidableRscope(v)
     }
 }
 
 impl RegionScope for UnelidableRscope {
-    fn default_region_bound(&self, _span: Span) -> Option<ty::Region> {
-        None
+    fn object_lifetime_default(&self, _span: Span) -> Option<ty::Region> {
+        Some(ty::ReStatic)
     }
 
     fn anon_regions(&self,
                     _span: Span,
-                    _count: uint)
-                    -> Result<Vec<ty::Region>, Option<Vec<(String, uint)>>> {
+                    _count: usize)
+                    -> Result<Vec<ty::Region>, Option<Vec<(String, usize)>>> {
         let UnelidableRscope(ref v) = *self;
         Err(Some(v.clone()))
     }
 }
 
-// A scope in which any omitted region defaults to `default`. This is
-// used after the `->` in function signatures, but also for backwards
-// compatibility with object types. The latter use may go away.
-#[allow(missing_copy_implementations)]
-pub struct SpecificRscope {
-    default: ty::Region
+// A scope in which omitted anonymous region defaults to
+// `default`. This is used after the `->` in function signatures. The
+// latter use may go away. Note that object-lifetime defaults work a
+// bit differently, as specified in RFC #599.
+pub struct ElidableRscope {
+    default: ty::Region,
 }
 
-impl SpecificRscope {
-    pub fn new(r: ty::Region) -> SpecificRscope {
-        SpecificRscope { default: r }
+impl ElidableRscope {
+    pub fn new(r: ty::Region) -> ElidableRscope {
+        ElidableRscope { default: r }
     }
 }
 
-impl RegionScope for SpecificRscope {
-    fn default_region_bound(&self, _span: Span) -> Option<ty::Region> {
-        Some(self.default)
+impl RegionScope for ElidableRscope {
+    fn object_lifetime_default(&self, _span: Span) -> Option<ty::Region> {
+        // Per RFC #599, object-lifetimes default to 'static unless
+        // overridden by context, and this takes precedence over
+        // lifetime elision.
+        Some(ty::ReStatic)
     }
 
     fn anon_regions(&self,
                     _span: Span,
-                    count: uint)
-                    -> Result<Vec<ty::Region>, Option<Vec<(String, uint)>>>
+                    count: usize)
+                    -> Result<Vec<ty::Region>, Option<Vec<(String, usize)>>>
     {
         Ok(repeat(self.default).take(count).collect())
     }
@@ -125,17 +131,55 @@ impl BindingRscope {
 }
 
 impl RegionScope for BindingRscope {
-    fn default_region_bound(&self, _span: Span) -> Option<ty::Region>
-    {
-        Some(self.next_region())
+    fn object_lifetime_default(&self, _span: Span) -> Option<ty::Region> {
+        // Per RFC #599, object-lifetimes default to 'static unless
+        // overridden by context, and this takes precedence over the
+        // binding defaults.
+        Some(ty::ReStatic)
     }
 
     fn anon_regions(&self,
                     _: Span,
-                    count: uint)
-                    -> Result<Vec<ty::Region>, Option<Vec<(String, uint)>>>
+                    count: usize)
+                    -> Result<Vec<ty::Region>, Option<Vec<(String, usize)>>>
     {
-        Ok(range(0, count).map(|_| self.next_region()).collect())
+        Ok((0..count).map(|_| self.next_region()).collect())
+    }
+}
+
+/// A scope which overrides the default object lifetime but has no other effect.
+pub struct ObjectLifetimeDefaultRscope<'r> {
+    base_scope: &'r (RegionScope+'r),
+    default: Option<ty::ObjectLifetimeDefault>,
+}
+
+impl<'r> ObjectLifetimeDefaultRscope<'r> {
+    pub fn new(base_scope: &'r (RegionScope+'r),
+               default: Option<ty::ObjectLifetimeDefault>)
+               -> ObjectLifetimeDefaultRscope<'r>
+    {
+        ObjectLifetimeDefaultRscope {
+            base_scope: base_scope,
+            default: default,
+        }
+    }
+}
+
+impl<'r> RegionScope for ObjectLifetimeDefaultRscope<'r> {
+    fn object_lifetime_default(&self, span: Span) -> Option<ty::Region> {
+        match self.default {
+            None => self.base_scope.object_lifetime_default(span),
+            Some(ty::ObjectLifetimeDefault::Ambiguous) => None,
+            Some(ty::ObjectLifetimeDefault::Specific(r)) => Some(r),
+        }
+    }
+
+    fn anon_regions(&self,
+                    span: Span,
+                    count: usize)
+                    -> Result<Vec<ty::Region>, Option<Vec<(String, usize)>>>
+    {
+        self.base_scope.anon_regions(span, count)
     }
 }
 
@@ -152,20 +196,19 @@ impl<'r> ShiftedRscope<'r> {
 }
 
 impl<'r> RegionScope for ShiftedRscope<'r> {
-    fn default_region_bound(&self, span: Span) -> Option<ty::Region>
-    {
-        self.base_scope.default_region_bound(span)
+    fn object_lifetime_default(&self, span: Span) -> Option<ty::Region> {
+        self.base_scope.object_lifetime_default(span)
             .map(|r| ty_fold::shift_region(r, 1))
     }
 
     fn anon_regions(&self,
                     span: Span,
-                    count: uint)
-                    -> Result<Vec<ty::Region>, Option<Vec<(String, uint)>>>
+                    count: usize)
+                    -> Result<Vec<ty::Region>, Option<Vec<(String, usize)>>>
     {
         match self.base_scope.anon_regions(span, count) {
             Ok(mut v) => {
-                for r in v.iter_mut() {
+                for r in &mut v {
                     *r = ty_fold::shift_region(*r, 1);
                 }
                 Ok(v)

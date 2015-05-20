@@ -8,109 +8,80 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use super::combine::*;
-use super::equate::Equate;
-use super::glb::Glb;
+use super::combine::CombineFields;
 use super::higher_ranked::HigherRankedRelations;
-use super::lattice::*;
-use super::sub::Sub;
-use super::{cres, InferCtxt};
-use super::{TypeTrace, Subtype};
+use super::InferCtxt;
+use super::lattice::{self, LatticeDir};
+use super::Subtype;
 
-use middle::ty::{BuiltinBounds};
 use middle::ty::{self, Ty};
-use syntax::ast::{MutMutable, MutImmutable, Unsafety};
-use util::ppaux::mt_to_string;
+use middle::ty_relate::{Relate, RelateResult, TypeRelation};
 use util::ppaux::Repr;
 
 /// "Least upper bound" (common supertype)
-pub struct Lub<'f, 'tcx: 'f> {
-    fields: CombineFields<'f, 'tcx>
+pub struct Lub<'a, 'tcx: 'a> {
+    fields: CombineFields<'a, 'tcx>
 }
 
-#[allow(non_snake_case)]
-pub fn Lub<'f, 'tcx>(cf: CombineFields<'f, 'tcx>) -> Lub<'f, 'tcx> {
-    Lub { fields: cf }
+impl<'a, 'tcx> Lub<'a, 'tcx> {
+    pub fn new(fields: CombineFields<'a, 'tcx>) -> Lub<'a, 'tcx> {
+        Lub { fields: fields }
+    }
 }
 
-impl<'f, 'tcx> Combine<'tcx> for Lub<'f, 'tcx> {
-    fn infcx<'a>(&'a self) -> &'a InferCtxt<'a, 'tcx> { self.fields.infcx }
-    fn tag(&self) -> String { "lub".to_string() }
+impl<'a, 'tcx> TypeRelation<'a, 'tcx> for Lub<'a, 'tcx> {
+    fn tag(&self) -> &'static str { "Lub" }
+
+    fn tcx(&self) -> &'a ty::ctxt<'tcx> { self.fields.tcx() }
+
     fn a_is_expected(&self) -> bool { self.fields.a_is_expected }
-    fn trace(&self) -> TypeTrace<'tcx> { self.fields.trace.clone() }
 
-    fn equate<'a>(&'a self) -> Equate<'a, 'tcx> { Equate(self.fields.clone()) }
-    fn sub<'a>(&'a self) -> Sub<'a, 'tcx> { Sub(self.fields.clone()) }
-    fn lub<'a>(&'a self) -> Lub<'a, 'tcx> { Lub(self.fields.clone()) }
-    fn glb<'a>(&'a self) -> Glb<'a, 'tcx> { Glb(self.fields.clone()) }
-
-    fn mts(&self, a: &ty::mt<'tcx>, b: &ty::mt<'tcx>) -> cres<'tcx, ty::mt<'tcx>> {
-        let tcx = self.tcx();
-
-        debug!("{}.mts({}, {})",
-               self.tag(),
-               mt_to_string(tcx, a),
-               mt_to_string(tcx, b));
-
-        if a.mutbl != b.mutbl {
-            return Err(ty::terr_mutability)
-        }
-
-        let m = a.mutbl;
-        match m {
-            MutImmutable => {
-                let t = try!(self.tys(a.ty, b.ty));
-                Ok(ty::mt {ty: t, mutbl: m})
-            }
-
-            MutMutable => {
-                let t = try!(self.equate().tys(a.ty, b.ty));
-                Ok(ty::mt {ty: t, mutbl: m})
-            }
+    fn relate_with_variance<T:Relate<'a,'tcx>>(&mut self,
+                                               variance: ty::Variance,
+                                               a: &T,
+                                               b: &T)
+                                               -> RelateResult<'tcx, T>
+    {
+        match variance {
+            ty::Invariant => self.fields.equate().relate(a, b),
+            ty::Covariant => self.relate(a, b),
+            ty::Bivariant => self.fields.bivariate().relate(a, b),
+            ty::Contravariant => self.fields.glb().relate(a, b),
         }
     }
 
-    fn contratys(&self, a: Ty<'tcx>, b: Ty<'tcx>) -> cres<'tcx, Ty<'tcx>> {
-        self.glb().tys(a, b)
+    fn tys(&mut self, a: Ty<'tcx>, b: Ty<'tcx>) -> RelateResult<'tcx, Ty<'tcx>> {
+        lattice::super_lattice_tys(self, a, b)
     }
 
-    fn unsafeties(&self, a: Unsafety, b: Unsafety) -> cres<'tcx, Unsafety> {
-        match (a, b) {
-          (Unsafety::Unsafe, _) | (_, Unsafety::Unsafe) => Ok(Unsafety::Unsafe),
-          (Unsafety::Normal, Unsafety::Normal) => Ok(Unsafety::Normal),
-        }
-    }
-
-    fn builtin_bounds(&self,
-                      a: ty::BuiltinBounds,
-                      b: ty::BuiltinBounds)
-                      -> cres<'tcx, ty::BuiltinBounds> {
-        // More bounds is a subtype of fewer bounds, so
-        // the LUB (mutual supertype) is the intersection.
-        Ok(a.intersection(b))
-    }
-
-    fn contraregions(&self, a: ty::Region, b: ty::Region)
-                    -> cres<'tcx, ty::Region> {
-        self.glb().regions(a, b)
-    }
-
-    fn regions(&self, a: ty::Region, b: ty::Region) -> cres<'tcx, ty::Region> {
+    fn regions(&mut self, a: ty::Region, b: ty::Region) -> RelateResult<'tcx, ty::Region> {
         debug!("{}.regions({}, {})",
                self.tag(),
                a.repr(self.tcx()),
                b.repr(self.tcx()));
 
-        Ok(self.infcx().region_vars.lub_regions(Subtype(self.trace()), a, b))
+        let origin = Subtype(self.fields.trace.clone());
+        Ok(self.fields.infcx.region_vars.lub_regions(origin, a, b))
     }
 
-    fn tys(&self, a: Ty<'tcx>, b: Ty<'tcx>) -> cres<'tcx, Ty<'tcx>> {
-        super_lattice_tys(self, a, b)
-    }
-
-    fn binders<T>(&self, a: &ty::Binder<T>, b: &ty::Binder<T>) -> cres<'tcx, ty::Binder<T>>
-        where T : Combineable<'tcx>
+    fn binders<T>(&mut self, a: &ty::Binder<T>, b: &ty::Binder<T>)
+                  -> RelateResult<'tcx, ty::Binder<T>>
+        where T: Relate<'a, 'tcx>
     {
-        self.higher_ranked_lub(a, b)
+        self.fields.higher_ranked_lub(a, b)
     }
 }
+
+impl<'a, 'tcx> LatticeDir<'a,'tcx> for Lub<'a, 'tcx> {
+    fn infcx(&self) -> &'a InferCtxt<'a,'tcx> {
+        self.fields.infcx
+    }
+
+    fn relate_bound(&self, v: Ty<'tcx>, a: Ty<'tcx>, b: Ty<'tcx>) -> RelateResult<'tcx, ()> {
+        let mut sub = self.fields.sub();
+        try!(sub.relate(&a, &v));
+        try!(sub.relate(&b, &v));
+        Ok(())
+    }
+}
+

@@ -8,28 +8,27 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use ast::{MetaItem, Item, Expr};
+use ast::{MetaItem, Expr};
 use codemap::Span;
-use ext::base::ExtCtxt;
+use ext::base::{ExtCtxt, Annotatable};
 use ext::build::AstBuilder;
 use ext::deriving::generic::*;
 use ext::deriving::generic::ty::*;
 use parse::token::InternedString;
 use ptr::P;
 
-pub fn expand_deriving_default<F>(cx: &mut ExtCtxt,
-                                  span: Span,
-                                  mitem: &MetaItem,
-                                  item: &Item,
-                                  push: F) where
-    F: FnOnce(P<Item>),
+pub fn expand_deriving_default(cx: &mut ExtCtxt,
+                               span: Span,
+                               mitem: &MetaItem,
+                               item: Annotatable,
+                               push: &mut FnMut(Annotatable))
 {
     let inline = cx.meta_word(span, InternedString::new("inline"));
     let attrs = vec!(cx.attribute(span, inline));
     let trait_def = TraitDef {
         span: span,
         attributes: Vec::new(),
-        path: Path::new(vec!("std", "default", "Default")),
+        path: path_std!(cx, core::default::Default),
         additional_bounds: Vec::new(),
         generics: LifetimeBounds::empty(),
         methods: vec!(
@@ -38,26 +37,27 @@ pub fn expand_deriving_default<F>(cx: &mut ExtCtxt,
                 generics: LifetimeBounds::empty(),
                 explicit_self: None,
                 args: Vec::new(),
-                ret_ty: Self,
+                ret_ty: Self_,
                 attributes: attrs,
-                combine_substructure: combine_substructure(box |a, b, c| {
+                is_unsafe: false,
+                combine_substructure: combine_substructure(Box::new(|a, b, c| {
                     default_substructure(a, b, c)
-                })
+                }))
             }
         ),
         associated_types: Vec::new(),
     };
-    trait_def.expand(cx, mitem, item, push)
+    trait_def.expand(cx, mitem, &item, push)
 }
 
 fn default_substructure(cx: &mut ExtCtxt, trait_span: Span, substr: &Substructure) -> P<Expr> {
     let default_ident = vec!(
-        cx.ident_of("std"),
+        cx.ident_of_std("core"),
         cx.ident_of("default"),
         cx.ident_of("Default"),
         cx.ident_of("default")
     );
-    let default_call = |&: span| cx.expr_call_global(span, default_ident.clone(), Vec::new());
+    let default_call = |span| cx.expr_call_global(span, default_ident.clone(), Vec::new());
 
     return match *substr.fields {
         StaticStruct(_, ref summary) => {

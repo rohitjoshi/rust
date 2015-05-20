@@ -10,13 +10,13 @@
 
 // issue #21405
 
-fn foo<F>(f: F) where F: FnMut(usize) {}
+struct Foo;
+
+fn foo<F>(f: F) where F: FnMut(Foo) {}
 
 fn main() {
     foo(|s| s.is_empty());
-    //~^ ERROR does not implement any method
+    //~^ ERROR no method named `is_empty` found
     //~^^ HELP #1: `core::slice::SliceExt`
     //~^^^ HELP #2: `core::str::StrExt`
-    //~^^^^ HELP #3: `collections::slice::SliceExt`
-    //~^^^^^ HELP #4: `collections::str::StrExt`
 }

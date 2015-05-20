@@ -10,30 +10,27 @@
 
 // ignore-android
 
-#![feature(asm)]
+#![feature(asm, rustc_attrs)]
 
 #![allow(dead_code, non_upper_case_globals)]
 
 #[cfg(any(target_arch = "x86",
           target_arch = "x86_64"))]
-pub fn main() {
+#[rustc_error]
+pub fn main() { //~ ERROR compilation successful
     // assignment not dead
     let mut x: isize = 0;
     unsafe {
         // extra colon
-        asm!("mov $1, $0" : "=r"(x) : "r"(5us), "0"(x) : : "cc");
+        asm!("mov $1, $0" : "=r"(x) : "r"(5_usize), "0"(x) : : "cc");
         //~^ WARNING unrecognized option
     }
     assert_eq!(x, 5);
 
     unsafe {
         // comma in place of a colon
-        asm!("add $2, $1; mov $1, $0" : "=r"(x) : "r"(x), "r"(8us) : "cc", "volatile");
+        asm!("add $2, $1; mov $1, $0" : "=r"(x) : "r"(x), "r"(8_usize) : "cc", "volatile");
         //~^ WARNING expected a clobber, found an option
     }
     assert_eq!(x, 13);
 }
-
-// At least one error is needed so that compilation fails
-#[static_assert]
-static b: bool = false; //~ ERROR static assertion failed

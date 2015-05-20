@@ -15,5 +15,5 @@ pub trait X {
         fn f() { }
         f();
     }
+    fn dummy(&self) { }
 }
-

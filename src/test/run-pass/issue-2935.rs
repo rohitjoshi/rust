@@ -11,7 +11,7 @@
 #![allow(unknown_features)]
 #![feature(box_syntax)]
 
-//type t = { a: int };
+//type t = { a: isize };
 // type t = { a: bool };
 type t = bool;
 
@@ -24,11 +24,11 @@ impl it for t {
 }
 
 pub fn main() {
-  //    let x = ({a: 4i} as it);
-  //   let y = box ({a: 4i});
-  //    let z = box ({a: 4i} as it);
+  //    let x = ({a: 4} as it);
+  //   let y = box ({a: 4});
+  //    let z = box ({a: 4} as it);
   //    let z = box ({a: true} as it);
-    let z = box() (box true as Box<it>);
+    let z: Box<_> = box () (box true as Box<it>);
     //  x.f();
     // y.f();
     // (*z).f();

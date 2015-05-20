@@ -35,26 +35,24 @@
 //! let x = ("colorless",  "green", "ideas", "sleep", "furiously");
 //! assert_eq!(x.3, "sleep");
 //!
-//! let v = (3i, 3i);
-//! let u = (1i, -5i);
-//! assert_eq!(v.0 * u.0 + v.1 * u.1, -12i);
+//! let v = (3, 3);
+//! let u = (1, -5);
+//! assert_eq!(v.0 * u.0 + v.1 * u.1, -12);
 //! ```
 //!
 //! Using traits implemented for tuples:
 //!
 //! ```
-//! use std::default::Default;
-//!
-//! let a = (1i, 2i);
-//! let b = (3i, 4i);
+//! let a = (1, 2);
+//! let b = (3, 4);
 //! assert!(a != b);
 //!
 //! let c = b.clone();
 //! assert!(b == c);
 //!
 //! let d : (u32, f32) = Default::default();
-//! assert_eq!(d, (0u32, 0.0f32));
+//! assert_eq!(d, (0, 0.0f32));
 //! ```
 
 #![doc(primitive = "tuple")]
-#![stable]
+#![stable(feature = "rust1", since = "1.0.0")]

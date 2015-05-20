@@ -8,22 +8,19 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(unsafe_destructor)]
-
-use std::thread::Thread;
+use std::thread;
 use std::rc::Rc;
 
-#[derive(Show)]
+#[derive(Debug)]
 struct Port<T>(Rc<T>);
 
 fn main() {
-    #[derive(Show)]
+    #[derive(Debug)]
     struct foo {
       _x: Port<()>,
     }
 
-    #[unsafe_destructor]
-    impl Drop for foo {
+        impl Drop for foo {
         fn drop(&mut self) {}
     }
 
@@ -35,7 +32,7 @@ fn main() {
 
     let x = foo(Port(Rc::new(())));
 
-    Thread::spawn(move|| {
+    thread::spawn(move|| {
         //~^ ERROR `core::marker::Send` is not implemented
         let y = x;
         println!("{:?}", y);

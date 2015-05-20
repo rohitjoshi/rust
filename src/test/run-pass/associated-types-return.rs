@@ -10,22 +10,23 @@
 
 // Test equality constraints on associated types in a where clause.
 
+
 pub trait Foo {
     type A;
     fn boo(&self) -> <Self as Foo>::A;
 }
 
 #[derive(PartialEq)]
-struct Bar;
+pub struct Bar;
 
-impl Foo for int {
-    type A = uint;
-    fn boo(&self) -> uint { 42 }
+impl Foo for isize {
+    type A = usize;
+    fn boo(&self) -> usize { 42 }
 }
 
 impl Foo for Bar {
-    type A = int;
-    fn boo(&self) -> int { 43 }
+    type A = isize;
+    fn boo(&self) -> isize { 43 }
 }
 
 impl Foo for char {
@@ -42,11 +43,11 @@ fn foo2<I: Foo>(x: I) -> <I as Foo>::A {
 }
 
 pub fn main() {
-    let a = 42i;
-    assert!(foo2(a) == 42u);
+    let a = 42;
+    assert!(foo2(a) == 42);
 
     let a = Bar;
-    assert!(foo2(a) == 43i);
+    assert!(foo2(a) == 43);
 
     let a = 'a';
     foo1(a);

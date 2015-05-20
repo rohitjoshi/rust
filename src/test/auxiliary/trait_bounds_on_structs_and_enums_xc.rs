@@ -8,15 +8,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub trait Trait {}
+pub trait Trait {
+    fn dummy(&self) { }
+}
 
 pub struct Foo<T:Trait> {
     pub x: T,
 }
 
 pub enum Bar<T:Trait> {
-    ABar(int),
+    ABar(isize),
     BBar(T),
-    CBar(uint),
+    CBar(usize),
 }
-

@@ -8,13 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 //
-// ignore-lexer-test FIXME #15877
 
 pub fn main() {
-    let x = 1i;
-    let y = 2i;
+    let x = 1;
+    let y = 2;
 
-    assert_eq!(3i, match (x, y) {
+    assert_eq!(3, match (x, y) {
         (1, 1) => 1,
         (2, 2) => 2,
         (1...2, 2) => 3,
@@ -22,7 +21,7 @@ pub fn main() {
     });
 
     // nested tuple
-    assert_eq!(3i, match ((x, y),) {
+    assert_eq!(3, match ((x, y),) {
         ((1, 1),) => 1,
         ((2, 2),) => 2,
         ((1...2, 2),) => 3,

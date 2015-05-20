@@ -8,12 +8,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// pretty-expanded FIXME #23616
+
 struct A {
     a: String
 }
 
 fn borrow<'a>(binding: &'a A) -> &'a str {
-    match binding.a.as_slice() {
+    match &*binding.a {
         "in" => "in_",
         "ref" => "ref_",
         ident => ident

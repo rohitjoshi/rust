@@ -10,14 +10,15 @@
 
 // Test paths to associated types using the type-parameter-only sugar.
 
+
 pub trait Foo {
     type A;
     fn boo(&self) -> Self::A;
 }
 
-impl Foo for int {
-    type A = uint;
-    fn boo(&self) -> uint {
+impl Foo for isize {
+    type A = usize;
+    fn boo(&self) -> usize {
         5
     }
 }
@@ -31,8 +32,9 @@ pub fn bar<T: Foo>(a: T, x: T::A) -> T::A {
 // Using a type via an impl.
 trait C {
     fn f();
+    fn g(&self) { }
 }
-struct B<X>;
+struct B<X>(X);
 impl<T: Foo> C for B<T> {
     fn f() {
         let x: T::A = panic!();
@@ -40,5 +42,5 @@ impl<T: Foo> C for B<T> {
 }
 
 pub fn main() {
-    let z: uint = bar(2i, 4u);
+    let z: usize = bar(2, 4);
 }

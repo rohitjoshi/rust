@@ -8,12 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![allow(unstable)]
+#![cfg_attr(rustc, feature(rustc_private))]
+#![cfg_attr(rustdoc, feature(rustdoc))]
 
 #[cfg(rustdoc)]
-extern crate "rustdoc" as this;
+extern crate rustdoc as this;
 
 #[cfg(rustc)]
-extern crate "rustc_driver" as this;
+extern crate rustc_driver as this;
 
 fn main() { this::main() }

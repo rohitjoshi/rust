@@ -44,15 +44,10 @@
 //!
 //! ```rust
 //! #![feature(plugin)]
-//!
-//! #[plugin]
-//! extern crate myplugin;
+//! #![plugin(myplugin)]
 //! ```
 //!
-//! If you don't need the plugin crate available at runtime, use
-//! `#[no_link]` as well.
-//!
-//! See [the compiler plugin guide](../../guide-plugin.html)
+//! See the [Plugins Chapter](../../book/compiler-plugins.html) of the book
 //! for more examples.
 
 pub use self::registry::Registry;

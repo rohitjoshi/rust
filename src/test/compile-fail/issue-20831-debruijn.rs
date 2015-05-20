@@ -13,8 +13,8 @@
 // below. Note that changing to a named lifetime made the problem go
 // away.
 
-use std::ops::{Shl, Shr};
 use std::cell::RefCell;
+use std::ops::{Shl, Shr};
 
 pub trait Subscriber {
     type Input;

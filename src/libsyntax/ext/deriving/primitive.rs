@@ -8,29 +8,28 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use ast::{MetaItem, Item, Expr};
+use ast::{MetaItem, Expr};
 use ast;
 use codemap::Span;
-use ext::base::ExtCtxt;
+use ext::base::{ExtCtxt, Annotatable};
 use ext::build::AstBuilder;
 use ext::deriving::generic::*;
 use ext::deriving::generic::ty::*;
 use parse::token::InternedString;
 use ptr::P;
 
-pub fn expand_deriving_from_primitive<F>(cx: &mut ExtCtxt,
-                                         span: Span,
-                                         mitem: &MetaItem,
-                                         item: &Item,
-                                         push: F) where
-    F: FnOnce(P<Item>),
+pub fn expand_deriving_from_primitive(cx: &mut ExtCtxt,
+                                      span: Span,
+                                      mitem: &MetaItem,
+                                      item: Annotatable,
+                                      push: &mut FnMut(Annotatable))
 {
     let inline = cx.meta_word(span, InternedString::new("inline"));
     let attrs = vec!(cx.attribute(span, inline));
     let trait_def = TraitDef {
         span: span,
         attributes: Vec::new(),
-        path: Path::new(vec!("std", "num", "FromPrimitive")),
+        path: path_std!(cx, core::num::FromPrimitive),
         additional_bounds: Vec::new(),
         generics: LifetimeBounds::empty(),
         methods: vec!(
@@ -38,44 +37,44 @@ pub fn expand_deriving_from_primitive<F>(cx: &mut ExtCtxt,
                 name: "from_i64",
                 generics: LifetimeBounds::empty(),
                 explicit_self: None,
-                args: vec!(
-                    Literal(Path::new(vec!("i64")))),
-                ret_ty: Literal(Path::new_(vec!("std", "option", "Option"),
+                args: vec!(Literal(path_local!(i64))),
+                ret_ty: Literal(Path::new_(pathvec_std!(cx, core::option::Option),
                                            None,
-                                           vec!(box Self),
+                                           vec!(Box::new(Self_)),
                                            true)),
                 // #[inline] liable to cause code-bloat
                 attributes: attrs.clone(),
-                combine_substructure: combine_substructure(box |c, s, sub| {
+                is_unsafe: false,
+                combine_substructure: combine_substructure(Box::new(|c, s, sub| {
                     cs_from("i64", c, s, sub)
-                }),
+                })),
             },
             MethodDef {
                 name: "from_u64",
                 generics: LifetimeBounds::empty(),
                 explicit_self: None,
-                args: vec!(
-                    Literal(Path::new(vec!("u64")))),
-                ret_ty: Literal(Path::new_(vec!("std", "option", "Option"),
+                args: vec!(Literal(path_local!(u64))),
+                ret_ty: Literal(Path::new_(pathvec_std!(cx, core::option::Option),
                                            None,
-                                           vec!(box Self),
+                                           vec!(Box::new(Self_)),
                                            true)),
                 // #[inline] liable to cause code-bloat
                 attributes: attrs,
-                combine_substructure: combine_substructure(box |c, s, sub| {
+                is_unsafe: false,
+                combine_substructure: combine_substructure(Box::new(|c, s, sub| {
                     cs_from("u64", c, s, sub)
-                }),
+                })),
             }
         ),
         associated_types: Vec::new(),
     };
 
-    trait_def.expand(cx, mitem, item, push)
+    trait_def.expand(cx, mitem, &item, push)
 }
 
 fn cs_from(name: &str, cx: &mut ExtCtxt, trait_span: Span, substr: &Substructure) -> P<Expr> {
-    let n = match substr.nonself_args {
-        [ref n] => n,
+    let n = match (substr.nonself_args.len(), substr.nonself_args.get(0)) {
+        (1, Some(o_f)) => o_f,
         _ => cx.span_bug(trait_span, "incorrect number of arguments in `derive(FromPrimitive)`")
     };
 
@@ -93,7 +92,7 @@ fn cs_from(name: &str, cx: &mut ExtCtxt, trait_span: Span, substr: &Substructure
 
             let mut arms = Vec::new();
 
-            for variant in enum_def.variants.iter() {
+            for variant in &enum_def.variants {
                 match variant.node.kind {
                     ast::TupleVariantKind(ref args) => {
                         if !args.is_empty() {

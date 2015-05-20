@@ -14,27 +14,34 @@
 Core encoding and decoding interfaces.
 */
 
+// Do not remove on snapshot creation. Needed for bootstrap. (Issue #22364)
+#![cfg_attr(stage0, feature(custom_attribute))]
 #![crate_name = "serialize"]
-#![unstable = "deprecated in favor of rustc-serialize on crates.io"]
+#![unstable(feature = "rustc_private",
+            reason = "deprecated in favor of rustc-serialize on crates.io")]
 #![staged_api]
 #![crate_type = "rlib"]
 #![crate_type = "dylib"]
 #![doc(html_logo_url = "http://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
-       html_favicon_url = "http://www.rust-lang.org/favicon.ico",
+       html_favicon_url = "https://doc.rust-lang.org/favicon.ico",
        html_root_url = "http://doc.rust-lang.org/nightly/",
        html_playground_url = "http://play.rust-lang.org/")]
-#![allow(unknown_features)]
+
 #![feature(box_syntax)]
-#![feature(old_impl_check)]
-#![feature(slicing_syntax)]
-#![allow(unknown_features)] #![feature(int_uint)]
-#![allow(unstable)]
+#![feature(collections)]
+#![feature(core)]
+#![feature(rustc_private)]
+#![feature(staged_api)]
+#![feature(std_misc)]
+#![feature(unicode)]
+#![feature(str_char)]
+#![cfg_attr(test, feature(test))]
 
 // test harness access
 #[cfg(test)] extern crate test;
 #[macro_use] extern crate log;
 
-extern crate unicode;
+extern crate rustc_unicode;
 extern crate collections;
 
 pub use self::serialize::{Decoder, Encoder, Decodable, Encodable,

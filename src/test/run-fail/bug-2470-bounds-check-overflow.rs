@@ -20,15 +20,15 @@ fn main() {
     // address of the 0th cell in the array (even though the index is
     // huge).
 
-    let x = vec!(1u,2u,3u);
+    let x = vec!(1_usize,2_usize,3_usize);
 
-    let base = x.as_ptr() as uint;
-    let idx = base / mem::size_of::<uint>();
+    let base = x.as_ptr() as usize;
+    let idx = base / mem::size_of::<usize>();
     println!("ov1 base = 0x{:x}", base);
     println!("ov1 idx = 0x{:x}", idx);
-    println!("ov1 sizeof::<uint>() = 0x{:x}", mem::size_of::<uint>());
-    println!("ov1 idx * sizeof::<uint>() = 0x{:x}",
-           idx * mem::size_of::<uint>());
+    println!("ov1 sizeof::<usize>() = 0x{:x}", mem::size_of::<usize>());
+    println!("ov1 idx * sizeof::<usize>() = 0x{:x}",
+           idx * mem::size_of::<usize>());
 
     // This should panic.
     println!("ov1 0x{:x}", x[idx]);

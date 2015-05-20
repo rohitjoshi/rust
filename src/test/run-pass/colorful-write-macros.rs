@@ -8,20 +8,17 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// no-pretty-expanded
-
-#![allow(unused_must_use, dead_code, deprecated)]
-use std::old_io::MemWriter;
+use std::io::Write;
 use std::fmt;
 
 struct Foo<'a> {
-    writer: &'a mut (Writer+'a),
+    writer: &'a mut (Write+'a),
     other: &'a str,
 }
 
 struct Bar;
 
-impl fmt::Writer for Bar {
+impl fmt::Write for Bar {
     fn write_str(&mut self, _: &str) -> fmt::Result {
         Ok(())
     }
@@ -32,14 +29,14 @@ fn borrowing_writer_from_struct_and_formatting_struct_field(foo: Foo) {
 }
 
 fn main() {
-    let mut w = MemWriter::new();
-    write!(&mut w as &mut Writer, "");
+    let mut w = Vec::new();
+    write!(&mut w as &mut Write, "");
     write!(&mut w, ""); // should coerce
     println!("ok");
 
     let mut s = Bar;
     {
-        use std::fmt::Writer;
+        use std::fmt::Write;
         write!(&mut s, "test");
     }
 }

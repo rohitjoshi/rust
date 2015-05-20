@@ -7,34 +7,35 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-/// As always, windows has something very different than unix, we mainly want
-/// to avoid having to depend too much on libunwind for windows.
-///
-/// If you google around, you'll find a fair bit of references to built-in
-/// functions to get backtraces on windows. It turns out that most of these are
-/// in an external library called dbghelp. I was unable to find this library
-/// via `-ldbghelp`, but it is apparently normal to do the `dlopen` equivalent
-/// of it.
-///
-/// You'll also find that there's a function called CaptureStackBackTrace
-/// mentioned frequently (which is also easy to use), but sadly I didn't have a
-/// copy of that function in my mingw install (maybe it was broken?). Instead,
-/// this takes the route of using StackWalk64 in order to walk the stack.
+
+//! As always, windows has something very different than unix, we mainly want
+//! to avoid having to depend too much on libunwind for windows.
+//!
+//! If you google around, you'll find a fair bit of references to built-in
+//! functions to get backtraces on windows. It turns out that most of these are
+//! in an external library called dbghelp. I was unable to find this library
+//! via `-ldbghelp`, but it is apparently normal to do the `dlopen` equivalent
+//! of it.
+//!
+//! You'll also find that there's a function called CaptureStackBackTrace
+//! mentioned frequently (which is also easy to use), but sadly I didn't have a
+//! copy of that function in my mingw install (maybe it was broken?). Instead,
+//! this takes the route of using StackWalk64 in order to walk the stack.
+
+#![allow(dead_code)]
+
+use prelude::v1::*;
+use io::prelude::*;
 
 use dynamic_lib::DynamicLibrary;
-use ffi;
-use core::ops::Index;
+use ffi::CStr;
 use intrinsics;
-use old_io::{IoResult, Writer};
+use io;
 use libc;
 use mem;
-use ops::Drop;
-use option::Option::{Some, None};
 use path::Path;
 use ptr;
-use result::Result::{Ok, Err};
-use slice::SliceExt;
-use str::{self, StrExt};
+use str;
 use sync::{StaticMutex, MUTEX_INIT};
 
 use sys_common::backtrace::*;
@@ -61,7 +62,7 @@ type StackWalk64Fn =
                        *mut libc::c_void, *mut libc::c_void,
                        *mut libc::c_void, *mut libc::c_void) -> libc::BOOL;
 
-const MAX_SYM_NAME: uint = 2000;
+const MAX_SYM_NAME: usize = 2000;
 const IMAGE_FILE_MACHINE_I386: libc::DWORD = 0x014c;
 const IMAGE_FILE_MACHINE_IA64: libc::DWORD = 0x0200;
 const IMAGE_FILE_MACHINE_AMD64: libc::DWORD = 0x8664;
@@ -103,7 +104,7 @@ struct ADDRESS64 {
     Mode: ADDRESS_MODE,
 }
 
-struct STACKFRAME64 {
+pub struct STACKFRAME64 {
     AddrPC: ADDRESS64,
     AddrReturn: ADDRESS64,
     AddrFrame: ADDRESS64,
@@ -136,7 +137,7 @@ struct KDHELP64 {
 mod arch {
     use libc;
 
-    const MAXIMUM_SUPPORTED_EXTENSION: uint = 512;
+    const MAXIMUM_SUPPORTED_EXTENSION: usize = 512;
 
     #[repr(C)]
     pub struct CONTEXT {
@@ -282,7 +283,6 @@ mod arch {
     }
 }
 
-#[repr(C)]
 struct Cleanup {
     handle: libc::HANDLE,
     SymCleanup: SymCleanupFn,
@@ -292,11 +292,11 @@ impl Drop for Cleanup {
     fn drop(&mut self) { (self.SymCleanup)(self.handle); }
 }
 
-pub fn write(w: &mut Writer) -> IoResult<()> {
+pub fn write(w: &mut Write) -> io::Result<()> {
     // According to windows documentation, all dbghelp functions are
     // single-threaded.
     static LOCK: StaticMutex = MUTEX_INIT;
-    let _g = unsafe { LOCK.lock() };
+    let _g = LOCK.lock();
 
     // Open up dbghelp.dll, we don't link to it explicitly because it can't
     // always be found. Additionally, it's nice having fewer dependencies.
@@ -333,7 +333,7 @@ pub fn write(w: &mut Writer) -> IoResult<()> {
     let _c = Cleanup { handle: process, SymCleanup: SymCleanup };
 
     // And now that we're done with all the setup, do the stack walking!
-    let mut i = 0i;
+    let mut i = 0;
     try!(write!(w, "stack backtrace:\n"));
     while StackWalk64(image, process, thread, &mut frame, &mut context,
                       ptr::null_mut(),
@@ -360,7 +360,7 @@ pub fn write(w: &mut Writer) -> IoResult<()> {
         if ret == libc::TRUE {
             try!(write!(w, " - "));
             let ptr = info.Name.as_ptr() as *const libc::c_char;
-            let bytes = unsafe { ffi::c_str_to_bytes(&ptr) };
+            let bytes = unsafe { CStr::from_ptr(ptr).to_bytes() };
             match str::from_utf8(bytes) {
                 Ok(s) => try!(demangle(w, s)),
                 Err(..) => try!(w.write_all(&bytes[..bytes.len()-1])),

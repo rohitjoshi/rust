@@ -8,7 +8,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// ignore-android: FIXME(#10381)
 
 // Gdb doesn't know about UTF-32 character encoding and will print a rust char as only
 // its numerical value.
@@ -115,8 +114,8 @@ fn main() {
     let bool_val: bool = true;
     let bool_ref: &bool = &bool_val;
 
-    let int_val: int = -1;
-    let int_ref: &int = &int_val;
+    let int_val: isize = -1;
+    let int_ref: &isize = &int_val;
 
     let char_val: char = 'a';
     let char_ref: &char = &char_val;
@@ -133,8 +132,8 @@ fn main() {
     let i64_val: i64 = -64;
     let i64_ref: &i64 = &i64_val;
 
-    let uint_val: uint = 1;
-    let uint_ref: &uint = &uint_val;
+    let uint_val: usize = 1;
+    let uint_ref: &usize = &uint_val;
 
     let u8_val: u8 = 100;
     let u8_ref: &u8 = &u8_val;

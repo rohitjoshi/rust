@@ -16,6 +16,7 @@
 // This tests that libraries built with #[no_std] can be linked to crates with
 // #[no_std] and actually run.
 
+#![feature(no_std)]
 #![no_std]
 
 extern crate no_std_crate;
@@ -29,7 +30,7 @@ pub mod linkhack {
 }
 
 #[start]
-pub fn main(_: int, _: **u8, _: *u8) -> int {
+pub fn main(_: isize, _: **u8, _: *u8) -> isize {
     no_std_crate::foo();
     0
 }

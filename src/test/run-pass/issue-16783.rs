@@ -8,7 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// pretty-expanded FIXME #23616
+
 pub fn main() {
     let x = [1, 2, 3];
-    let y = x.as_slice();
+    let y = x;
 }

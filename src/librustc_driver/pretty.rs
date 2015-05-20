@@ -35,14 +35,17 @@ use syntax::codemap;
 use syntax::fold::{self, Folder};
 use syntax::print::{pp, pprust};
 use syntax::ptr::P;
+use syntax::util::small_vector::SmallVector;
 
 use graphviz as dot;
 
-use std::old_io::{self, MemReader};
+use std::fs::File;
+use std::io::{self, Write};
 use std::option;
+use std::path::PathBuf;
 use std::str::FromStr;
 
-#[derive(Copy, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum PpSourceMode {
     PpmNormal,
     PpmEveryBodyLoops,
@@ -54,7 +57,7 @@ pub enum PpSourceMode {
 }
 
 
-#[derive(Copy, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum PpFlowGraphMode {
     Default,
     /// Drops the labels from the edges in the flowgraph output. This
@@ -63,7 +66,7 @@ pub enum PpFlowGraphMode {
     /// have become a pain to maintain.
     UnlabelledEdges,
 }
-#[derive(Copy, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum PpMode {
     PpmSource(PpSourceMode),
     PpmFlowGraph(PpFlowGraphMode),
@@ -72,7 +75,7 @@ pub enum PpMode {
 pub fn parse_pretty(sess: &Session,
                     name: &str,
                     extended: bool) -> (PpMode, Option<UserIdentifiedItem>) {
-    let mut split = name.splitn(1, '=');
+    let mut split = name.splitn(2, '=');
     let first = split.next().unwrap();
     let opt_second = split.next();
     let first = match (first, extended) {
@@ -87,19 +90,19 @@ pub fn parse_pretty(sess: &Session,
         ("flowgraph,unlabelled", true)    => PpmFlowGraph(PpFlowGraphMode::UnlabelledEdges),
         _ => {
             if extended {
-                sess.fatal(format!(
+                sess.fatal(&format!(
                     "argument to `xpretty` must be one of `normal`, \
                      `expanded`, `flowgraph[,unlabelled]=<nodeid>`, `typed`, `identified`, \
-                     `expanded,identified`, or `everybody_loops`; got {}", name).as_slice());
+                     `expanded,identified`, or `everybody_loops`; got {}", name));
             } else {
-                sess.fatal(format!(
+                sess.fatal(&format!(
                     "argument to `pretty` must be one of `normal`, \
                      `expanded`, `typed`, `identified`, \
-                     or `expanded,identified`; got {}", name).as_slice());
+                     or `expanded,identified`; got {}", name));
             }
         }
     };
-    let opt_second = opt_second.and_then(|s| s.parse::<UserIdentifiedItem>());
+    let opt_second = opt_second.and_then(|s| s.parse::<UserIdentifiedItem>().ok());
     (first, opt_second)
 }
 
@@ -208,7 +211,7 @@ impl<'ast> PrinterSupport<'ast> for IdentifiedAnnotation<'ast> {
 impl<'ast> pprust::PpAnn for IdentifiedAnnotation<'ast> {
     fn pre(&self,
            s: &mut pprust::State,
-           node: pprust::AnnNode) -> old_io::IoResult<()> {
+           node: pprust::AnnNode) -> io::Result<()> {
         match node {
             pprust::NodeExpr(_) => s.popen(),
             _ => Ok(())
@@ -216,13 +219,17 @@ impl<'ast> pprust::PpAnn for IdentifiedAnnotation<'ast> {
     }
     fn post(&self,
             s: &mut pprust::State,
-            node: pprust::AnnNode) -> old_io::IoResult<()> {
+            node: pprust::AnnNode) -> io::Result<()> {
         match node {
             pprust::NodeIdent(_) | pprust::NodeName(_) => Ok(()),
 
             pprust::NodeItem(item) => {
                 try!(pp::space(&mut s.s));
                 s.synth_comment(item.id.to_string())
+            }
+            pprust::NodeSubItem(id) => {
+                try!(pp::space(&mut s.s));
+                s.synth_comment(id.to_string())
             }
             pprust::NodeBlock(blk) => {
                 try!(pp::space(&mut s.s));
@@ -259,7 +266,7 @@ impl<'ast> PrinterSupport<'ast> for HygieneAnnotation<'ast> {
 impl<'ast> pprust::PpAnn for HygieneAnnotation<'ast> {
     fn post(&self,
             s: &mut pprust::State,
-            node: pprust::AnnNode) -> old_io::IoResult<()> {
+            node: pprust::AnnNode) -> io::Result<()> {
         match node {
             pprust::NodeIdent(&ast::Ident { name: ast::Name(nm), ctxt }) => {
                 try!(pp::space(&mut s.s));
@@ -294,7 +301,7 @@ impl<'tcx> PrinterSupport<'tcx> for TypedAnnotation<'tcx> {
 impl<'tcx> pprust::PpAnn for TypedAnnotation<'tcx> {
     fn pre(&self,
            s: &mut pprust::State,
-           node: pprust::AnnNode) -> old_io::IoResult<()> {
+           node: pprust::AnnNode) -> io::Result<()> {
         match node {
             pprust::NodeExpr(_) => s.popen(),
             _ => Ok(())
@@ -302,7 +309,7 @@ impl<'tcx> pprust::PpAnn for TypedAnnotation<'tcx> {
     }
     fn post(&self,
             s: &mut pprust::State,
-            node: pprust::AnnNode) -> old_io::IoResult<()> {
+            node: pprust::AnnNode) -> io::Result<()> {
         let tcx = &self.analysis.ty_cx;
         match node {
             pprust::NodeExpr(expr) => {
@@ -312,7 +319,7 @@ impl<'tcx> pprust::PpAnn for TypedAnnotation<'tcx> {
                 try!(pp::word(&mut s.s,
                               &ppaux::ty_to_string(
                                   tcx,
-                                  ty::expr_ty(tcx, expr))[]));
+                                  ty::expr_ty(tcx, expr))));
                 s.pclose()
             }
             _ => Ok(())
@@ -338,20 +345,18 @@ fn gather_flowgraph_variants(sess: &Session) -> Vec<borrowck_dot::Variant> {
     variants
 }
 
-#[derive(Clone, Show)]
+#[derive(Clone, Debug)]
 pub enum UserIdentifiedItem {
     ItemViaNode(ast::NodeId),
     ItemViaPath(Vec<String>),
 }
 
 impl FromStr for UserIdentifiedItem {
-    fn from_str(s: &str) -> Option<UserIdentifiedItem> {
-        s.parse().map(ItemViaNode).or_else(|| {
-            let v : Vec<_> = s.split_str("::")
-                .map(|x|x.to_string())
-                .collect();
-            Some(ItemViaPath(v))
-        })
+    type Err = ();
+    fn from_str(s: &str) -> Result<UserIdentifiedItem, ()> {
+        Ok(s.parse().map(ItemViaNode).unwrap_or_else(|_| {
+            ItemViaPath(s.split("::").map(|s| s.to_string()).collect())
+        }))
     }
 }
 
@@ -385,23 +390,23 @@ impl UserIdentifiedItem {
             ItemViaNode(node_id) =>
                 NodesMatchingDirect(Some(node_id).into_iter()),
             ItemViaPath(ref parts) =>
-                NodesMatchingSuffix(map.nodes_matching_suffix(&parts[])),
+                NodesMatchingSuffix(map.nodes_matching_suffix(&parts[..])),
         }
     }
 
     fn to_one_node_id(self, user_option: &str, sess: &Session, map: &ast_map::Map) -> ast::NodeId {
-        let fail_because = |&: is_wrong_because| -> ast::NodeId {
+        let fail_because = |is_wrong_because| -> ast::NodeId {
             let message =
                 format!("{} needs NodeId (int) or unique \
                          path suffix (b::c::d); got {}, which {}",
                         user_option,
                         self.reconstructed_input(),
                         is_wrong_because);
-            sess.fatal(&message[])
+            sess.fatal(&message[..])
         };
 
         let mut saw_node = ast::DUMMY_NODE_ID;
-        let mut seen = 0u;
+        let mut seen = 0;
         for node in self.all_matching_node_ids(map) {
             saw_node = node;
             seen += 1;
@@ -471,6 +476,29 @@ impl fold::Folder for ReplaceBodyWithLoop {
         }
     }
 
+    fn fold_trait_item(&mut self, i: P<ast::TraitItem>) -> SmallVector<P<ast::TraitItem>> {
+        match i.node {
+            ast::ConstTraitItem(..) => {
+                self.within_static_or_const = true;
+                let ret = fold::noop_fold_trait_item(i, self);
+                self.within_static_or_const = false;
+                return ret;
+            }
+            _ => fold::noop_fold_trait_item(i, self),
+        }
+    }
+
+    fn fold_impl_item(&mut self, i: P<ast::ImplItem>) -> SmallVector<P<ast::ImplItem>> {
+        match i.node {
+            ast::ConstImplItem(..) => {
+                self.within_static_or_const = true;
+                let ret = fold::noop_fold_impl_item(i, self);
+                self.within_static_or_const = false;
+                return ret;
+            }
+            _ => fold::noop_fold_impl_item(i, self),
+        }
+    }
 
     fn fold_block(&mut self, b: P<ast::Block>) -> P<ast::Block> {
         fn expr_to_block(rules: ast::BlockCheckMode,
@@ -509,7 +537,7 @@ pub fn pretty_print_input(sess: Session,
                           input: &Input,
                           ppm: PpMode,
                           opt_uii: Option<UserIdentifiedItem>,
-                          ofile: Option<Path>) {
+                          ofile: Option<PathBuf>) {
     let krate = driver::phase_1_parse_input(&sess, cfg, input);
 
     let krate = if let PpmSource(PpmEveryBodyLoops) = ppm {
@@ -519,12 +547,12 @@ pub fn pretty_print_input(sess: Session,
         krate
     };
 
-    let id = link::find_crate_name(Some(&sess), krate.attrs.as_slice(), input);
+    let id = link::find_crate_name(Some(&sess), &krate.attrs, input);
 
     let is_expanded = needs_expansion(&ppm);
     let compute_ast_map = needs_ast_map(&ppm, &opt_uii);
     let krate = if compute_ast_map {
-        match driver::phase_2_configure_and_expand(&sess, krate, &id[], None) {
+        match driver::phase_2_configure_and_expand(&sess, krate, &id[..], None) {
             None => return,
             Some(k) => k
         }
@@ -543,26 +571,21 @@ pub fn pretty_print_input(sess: Session,
     };
 
     let src_name = driver::source_name(input);
-    let src = sess.codemap().get_filemap(&src_name[])
-                            .src.as_bytes().to_vec();
-    let mut rdr = MemReader::new(src);
+    let src = sess.codemap().get_filemap(&src_name[..])
+                            .src
+                            .as_ref()
+                            .unwrap()
+                            .as_bytes()
+                            .to_vec();
+    let mut rdr = &src[..];
 
-    let out = match ofile {
-        None => box old_io::stdout() as Box<Writer+'static>,
-        Some(p) => {
-            let r = old_io::File::create(&p);
-            match r {
-                Ok(w) => box w as Box<Writer+'static>,
-                Err(e) => panic!("print-print failed to open {} due to {}",
-                                p.display(), e),
-            }
-        }
-    };
+    let mut out = Vec::new();
 
     match (ppm, opt_uii) {
-        (PpmSource(s), None) =>
+        (PpmSource(s), None) => {
+            let out: &mut Write = &mut out;
             s.call_with_pp_support(
-                sess, ast_map, &arenas, id, out, |annotation, out| {
+                sess, ast_map, &arenas, id, box out, |annotation, out| {
                     debug!("pretty printing source code {:?}", s);
                     let sess = annotation.sess();
                     pprust::print_crate(sess.codemap(),
@@ -573,9 +596,11 @@ pub fn pretty_print_input(sess: Session,
                                         out,
                                         annotation.pp_ann(),
                                         is_expanded)
-                }),
+            })
+        }
 
-        (PpmSource(s), Some(uii)) =>
+        (PpmSource(s), Some(uii)) => {
+            let out: &mut Write = &mut out;
             s.call_with_pp_support(
                 sess, ast_map, &arenas, id, (out,uii), |annotation, (out,uii)| {
                     debug!("pretty printing source code {:?}", s);
@@ -587,7 +612,7 @@ pub fn pretty_print_input(sess: Session,
                                                       sess.diagnostic(),
                                                       src_name.to_string(),
                                                       &mut rdr,
-                                                      out,
+                                                      box out,
                                                       annotation.pp_ann(),
                                                       is_expanded);
                     for node_id in uii.all_matching_node_ids(ast_map) {
@@ -598,13 +623,14 @@ pub fn pretty_print_input(sess: Session,
                         try!(pp::hardbreak(&mut pp_state.s));
                     }
                     pp::eof(&mut pp_state.s)
-                }),
+                })
+        }
 
         (PpmFlowGraph(mode), opt_uii) => {
             debug!("pretty printing flow graph for {:?}", opt_uii);
             let uii = opt_uii.unwrap_or_else(|| {
                 sess.fatal(&format!("`pretty flowgraph=..` needs NodeId (int) or
-                                     unique path suffix (b::c::d)")[])
+                                     unique path suffix (b::c::d)"))
 
             });
             let ast_map = ast_map.expect("--pretty flowgraph missing ast_map");
@@ -612,10 +638,11 @@ pub fn pretty_print_input(sess: Session,
 
             let node = ast_map.find(nodeid).unwrap_or_else(|| {
                 sess.fatal(&format!("--pretty flowgraph couldn't find id: {}",
-                                   nodeid)[])
+                                   nodeid))
             });
 
             let code = blocks::Code::from_node(node);
+            let out: &mut Write = &mut out;
             match code {
                 Some(code) => {
                     let variants = gather_flowgraph_variants(&sess);
@@ -634,20 +661,31 @@ pub fn pretty_print_input(sess: Session,
                     // point to what was found, if there's an
                     // accessible span.
                     match ast_map.opt_span(nodeid) {
-                        Some(sp) => sess.span_fatal(sp, &message[]),
-                        None => sess.fatal(&message[])
+                        Some(sp) => sess.span_fatal(sp, &message[..]),
+                        None => sess.fatal(&message[..])
                     }
                 }
             }
         }
-    }.unwrap()
+    }.unwrap();
+
+    match ofile {
+        None => print!("{}", String::from_utf8(out).unwrap()),
+        Some(p) => {
+            match File::create(&p) {
+                Ok(mut w) => w.write_all(&out).unwrap(),
+                Err(e) => panic!("print-print failed to open {} due to {}",
+                                p.display(), e),
+            }
+        }
+    }
 }
 
-fn print_flowgraph<W:old_io::Writer>(variants: Vec<borrowck_dot::Variant>,
-                                 analysis: ty::CrateAnalysis,
-                                 code: blocks::Code,
-                                 mode: PpFlowGraphMode,
-                                 mut out: W) -> old_io::IoResult<()> {
+fn print_flowgraph<W: Write>(variants: Vec<borrowck_dot::Variant>,
+                             analysis: ty::CrateAnalysis,
+                             code: blocks::Code,
+                             mode: PpFlowGraphMode,
+                             mut out: W) -> io::Result<()> {
     let ty_cx = &analysis.ty_cx;
     let cfg = match code {
         blocks::BlockCode(block) => cfg::CFG::new(ty_cx, &*block),
@@ -662,7 +700,7 @@ fn print_flowgraph<W:old_io::Writer>(variants: Vec<borrowck_dot::Variant>,
     };
 
     match code {
-        _ if variants.len() == 0 => {
+        _ if variants.is_empty() => {
             let r = dot::render(&lcfg, &mut out);
             return expand_err_details(r);
         }
@@ -687,17 +725,10 @@ fn print_flowgraph<W:old_io::Writer>(variants: Vec<borrowck_dot::Variant>,
         }
     }
 
-    fn expand_err_details(r: old_io::IoResult<()>) -> old_io::IoResult<()> {
+    fn expand_err_details(r: io::Result<()>) -> io::Result<()> {
         r.map_err(|ioerr| {
-            let orig_detail = ioerr.detail.clone();
-            let m = "graphviz::render failed";
-            old_io::IoError {
-                detail: Some(match orig_detail {
-                    None => m.to_string(),
-                    Some(d) => format!("{}: {}", m, d)
-                }),
-                ..ioerr
-            }
+            io::Error::new(io::ErrorKind::Other,
+                           &format!("graphviz::render failed: {}", ioerr)[..])
         })
     }
 }

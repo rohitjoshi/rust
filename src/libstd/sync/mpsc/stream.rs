@@ -25,25 +25,25 @@ use self::Message::*;
 use core::prelude::*;
 
 use core::cmp;
-use core::int;
-use thread::Thread;
+use core::isize;
+use thread;
 
 use sync::atomic::{AtomicIsize, AtomicUsize, Ordering, AtomicBool};
 use sync::mpsc::Receiver;
 use sync::mpsc::blocking::{self, SignalToken};
 use sync::mpsc::spsc_queue as spsc;
 
-const DISCONNECTED: int = int::MIN;
+const DISCONNECTED: isize = isize::MIN;
 #[cfg(test)]
-const MAX_STEALS: int = 5;
+const MAX_STEALS: isize = 5;
 #[cfg(not(test))]
-const MAX_STEALS: int = 1 << 20;
+const MAX_STEALS: isize = 1 << 20;
 
 pub struct Packet<T> {
     queue: spsc::Queue<Message<T>>, // internal queue for all message
 
     cnt: AtomicIsize, // How many items are on this channel
-    steals: int, // How many times has a port received without blocking?
+    steals: isize, // How many times has a port received without blocking?
     to_wake: AtomicUsize, // SignalToken for the blocked thread to wake up
 
     port_dropped: AtomicBool, // flag if the channel has been destroyed.
@@ -74,7 +74,7 @@ enum Message<T> {
     GoUp(Receiver<T>),
 }
 
-impl<T: Send> Packet<T> {
+impl<T> Packet<T> {
     pub fn new() -> Packet<T> {
         Packet {
             queue: unsafe { spsc::Queue::new(128) },
@@ -146,7 +146,7 @@ impl<T: Send> Packet<T> {
         let ptr = self.to_wake.load(Ordering::SeqCst);
         self.to_wake.store(0, Ordering::SeqCst);
         assert!(ptr != 0);
-        unsafe { SignalToken::cast_from_uint(ptr) }
+        unsafe { SignalToken::cast_from_usize(ptr) }
     }
 
     // Decrements the count on the channel for a sleeper, returning the sleeper
@@ -154,7 +154,7 @@ impl<T: Send> Packet<T> {
     // steals into account.
     fn decrement(&mut self, token: SignalToken) -> Result<(), SignalToken> {
         assert_eq!(self.to_wake.load(Ordering::SeqCst), 0);
-        let ptr = unsafe { token.cast_to_uint() };
+        let ptr = unsafe { token.cast_to_usize() };
         self.to_wake.store(ptr, Ordering::SeqCst);
 
         let steals = self.steals;
@@ -171,7 +171,7 @@ impl<T: Send> Packet<T> {
         }
 
         self.to_wake.store(0, Ordering::SeqCst);
-        Err(unsafe { SignalToken::cast_from_uint(ptr) })
+        Err(unsafe { SignalToken::cast_from_usize(ptr) })
     }
 
     pub fn recv(&mut self) -> Result<T, Failure<T>> {
@@ -181,7 +181,7 @@ impl<T: Send> Packet<T> {
             data => return data,
         }
 
-        // Welp, our channel has no data. Deschedule the current task and
+        // Welp, our channel has no data. Deschedule the current thread and
         // initiate the blocking protocol.
         let (wait_token, signal_token) = blocking::tokens();
         if self.decrement(signal_token).is_ok() {
@@ -350,7 +350,7 @@ impl<T: Send> Packet<T> {
     }
 
     // increment the count on the channel (used for selection)
-    fn bump(&mut self, amt: int) -> int {
+    fn bump(&mut self, amt: isize) -> isize {
         match self.cnt.fetch_add(amt, Ordering::SeqCst) {
             DISCONNECTED => {
                 self.cnt.store(DISCONNECTED, Ordering::SeqCst);
@@ -385,7 +385,7 @@ impl<T: Send> Packet<T> {
         }
     }
 
-    // Removes a previous task from being blocked in this port
+    // Removes a previous thread from being blocked in this port
     pub fn abort_selection(&mut self,
                            was_upgrade: bool) -> Result<bool, Receiver<T>> {
         // If we're aborting selection after upgrading from a oneshot, then
@@ -414,7 +414,7 @@ impl<T: Send> Packet<T> {
         let prev = self.bump(steals + 1);
 
         // If we were previously disconnected, then we know for sure that there
-        // is no task in to_wake, so just keep going
+        // is no thread in to_wake, so just keep going
         let has_data = if prev == DISCONNECTED {
             assert_eq!(self.to_wake.load(Ordering::SeqCst), 0);
             true // there is data, that data is that we're disconnected
@@ -428,7 +428,7 @@ impl<T: Send> Packet<T> {
             //
             // If the previous count was positive then we're in a tougher
             // situation. A possible race is that a sender just incremented
-            // through -1 (meaning it's going to try to wake a task up), but it
+            // through -1 (meaning it's going to try to wake a thread up), but it
             // hasn't yet read the to_wake. In order to prevent a future recv()
             // from waking up too early (this sender picking up the plastered
             // over to_wake), we spin loop here waiting for to_wake to be 0.
@@ -440,7 +440,7 @@ impl<T: Send> Packet<T> {
                 drop(self.take_to_wake());
             } else {
                 while self.to_wake.load(Ordering::SeqCst) != 0 {
-                    Thread::yield_now();
+                    thread::yield_now();
                 }
             }
             assert_eq!(self.steals, 0);
@@ -471,8 +471,7 @@ impl<T: Send> Packet<T> {
     }
 }
 
-#[unsafe_destructor]
-impl<T: Send> Drop for Packet<T> {
+impl<T> Drop for Packet<T> {
     fn drop(&mut self) {
         // Note that this load is not only an assert for correctness about
         // disconnection, but also a proper fence before the read of

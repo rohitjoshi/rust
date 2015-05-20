@@ -8,7 +8,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// ignore-android: FIXME(#10381)
 // min-lldb-version: 310
 
 // compile-flags:-g
@@ -17,7 +16,7 @@
 
 // gdb-command:run
 
-// gdb-command:print 'lexical-scopes-in-block-expression::MUT_INT'
+// gdb-command:print 'lexical_scopes_in_block_expression::MUT_INT'
 // gdb-check:$1 = 0
 
 // STRUCT EXPRESSION
@@ -29,7 +28,7 @@
 
 // gdb-command:print val
 // gdb-check:$4 = 11
-// gdb-command:print 'lexical-scopes-in-block-expression::MUT_INT'
+// gdb-command:print 'lexical_scopes_in_block_expression::MUT_INT'
 // gdb-check:$5 = 1
 // gdb-command:print ten
 // gdb-check:$6 = 10
@@ -50,7 +49,7 @@
 
 // gdb-command:print val
 // gdb-check:$11 = 12
-// gdb-command:print 'lexical-scopes-in-block-expression::MUT_INT'
+// gdb-command:print 'lexical_scopes_in_block_expression::MUT_INT'
 // gdb-check:$12 = 2
 // gdb-command:print ten
 // gdb-check:$13 = 10
@@ -71,7 +70,7 @@
 
 // gdb-command:print val
 // gdb-check:$18 = 13
-// gdb-command:print 'lexical-scopes-in-block-expression::MUT_INT'
+// gdb-command:print 'lexical_scopes_in_block_expression::MUT_INT'
 // gdb-check:$19 = 3
 // gdb-command:print ten
 // gdb-check:$20 = 10
@@ -92,7 +91,7 @@
 
 // gdb-command:print val
 // gdb-check:$25 = 14
-// gdb-command:print 'lexical-scopes-in-block-expression::MUT_INT'
+// gdb-command:print 'lexical_scopes_in_block_expression::MUT_INT'
 // gdb-check:$26 = 4
 // gdb-command:print ten
 // gdb-check:$27 = 10
@@ -113,7 +112,7 @@
 
 // gdb-command:print val
 // gdb-check:$32 = 15
-// gdb-command:print 'lexical-scopes-in-block-expression::MUT_INT'
+// gdb-command:print 'lexical_scopes_in_block_expression::MUT_INT'
 // gdb-check:$33 = 5
 // gdb-command:print ten
 // gdb-check:$34 = 10
@@ -134,7 +133,7 @@
 
 // gdb-command:print val
 // gdb-check:$39 = 16
-// gdb-command:print 'lexical-scopes-in-block-expression::MUT_INT'
+// gdb-command:print 'lexical_scopes_in_block_expression::MUT_INT'
 // gdb-check:$40 = 6
 // gdb-command:print ten
 // gdb-check:$41 = 10
@@ -156,7 +155,7 @@
 
 // gdb-command:print val
 // gdb-check:$46 = 17
-// gdb-command:print 'lexical-scopes-in-block-expression::MUT_INT'
+// gdb-command:print 'lexical_scopes_in_block_expression::MUT_INT'
 // gdb-check:$47 = 7
 // gdb-command:print ten
 // gdb-check:$48 = 10
@@ -177,7 +176,7 @@
 
 // gdb-command:print val
 // gdb-check:$53 = 18
-// gdb-command:print 'lexical-scopes-in-block-expression::MUT_INT'
+// gdb-command:print 'lexical_scopes_in_block_expression::MUT_INT'
 // gdb-check:$54 = 8
 // gdb-command:print ten
 // gdb-check:$55 = 10
@@ -351,21 +350,21 @@
 #![allow(unused_assignments)]
 #![omit_gdb_pretty_printer_section]
 
-static mut MUT_INT: int = 0;
+static mut MUT_INT: isize = 0;
 
 struct Point {
-    x: int,
-    y: int
+    x: isize,
+    y: isize
 }
 
-fn a_function(x: int) -> int {
+fn a_function(x: isize) -> isize {
     x + 1
 }
 
 fn main() {
 
-    let val = -1i;
-    let ten = 10i;
+    let val = -1;
+    let ten = 10;
 
     // surrounded by struct expression
     let point = Point {
@@ -417,7 +416,7 @@ fn main() {
         sentinel();
 
         val
-    }, 0i);
+    }, 0);
 
     zzz(); // #break
     sentinel();
@@ -492,7 +491,7 @@ fn main() {
     sentinel();
 
     // index expression
-    let a_vector = [10i; 20];
+    let a_vector = [10; 20];
     let _ = a_vector[{
         zzz(); // #break
         sentinel();
@@ -503,7 +502,7 @@ fn main() {
         zzz(); // #break
         sentinel();
 
-        val as uint
+        val as usize
     }];
 
     zzz(); // #break

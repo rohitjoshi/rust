@@ -8,7 +8,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-static mut destructions : int = 3;
+
+#![feature(unsafe_no_drop_flag)]
+
+static mut destructions : isize = 3;
 
 pub fn foo() {
     #[unsafe_no_drop_flag]

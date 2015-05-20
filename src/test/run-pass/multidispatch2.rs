@@ -8,6 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+
 use std::fmt::Debug;
 use std::default::Default;
 
@@ -23,14 +24,13 @@ impl<T> MyTrait<T> for T
     }
 }
 
+#[derive(Copy, Clone)]
 struct MyType {
-    dummy: uint
+    dummy: usize
 }
 
-impl Copy for MyType {}
-
-impl MyTrait<uint> for MyType {
-    fn get(&self) -> uint { self.dummy }
+impl MyTrait<usize> for MyType {
+    fn get(&self) -> usize { self.dummy }
 }
 
 fn test_eq<T,M>(m: M, v: T)
@@ -41,7 +41,7 @@ where T : Eq + Debug,
 }
 
 pub fn main() {
-    test_eq(22u, 0u);
+    test_eq(22_usize, 0_usize);
 
     let value = MyType { dummy: 256 + 22 };
     test_eq(value, value.dummy);

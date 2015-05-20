@@ -8,9 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(optin_builtin_traits)]
+// pretty-expanded FIXME #23616
 
-use std::marker::Send;
+#![feature(optin_builtin_traits)]
 
 struct TestType;
 
@@ -20,7 +20,7 @@ trait TestTrait {}
 
 impl !Send for TestType {}
 
-struct TestType2<T>;
+struct TestType2<T>(T);
 
 impl<T> TestType2<T> {}
 

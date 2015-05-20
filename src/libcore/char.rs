@@ -10,7 +10,7 @@
 
 //! Character manipulation.
 //!
-//! For more details, see ::unicode::char (a.k.a. std::char)
+//! For more details, see ::rustc_unicode::char (a.k.a. std::char)
 
 #![allow(non_snake_case)]
 #![doc(primitive = "char")]
@@ -22,13 +22,13 @@ use option::Option;
 use slice::SliceExt;
 
 // UTF-8 ranges and tags for encoding characters
-static TAG_CONT: u8    = 0b1000_0000u8;
-static TAG_TWO_B: u8   = 0b1100_0000u8;
-static TAG_THREE_B: u8 = 0b1110_0000u8;
-static TAG_FOUR_B: u8  = 0b1111_0000u8;
-static MAX_ONE_B: u32   =     0x80u32;
-static MAX_TWO_B: u32   =    0x800u32;
-static MAX_THREE_B: u32 =  0x10000u32;
+const TAG_CONT: u8    = 0b1000_0000;
+const TAG_TWO_B: u8   = 0b1100_0000;
+const TAG_THREE_B: u8 = 0b1110_0000;
+const TAG_FOUR_B: u8  = 0b1111_0000;
+const MAX_ONE_B: u32   =     0x80;
+const MAX_TWO_B: u32   =    0x800;
+const MAX_THREE_B: u32 =  0x10000;
 
 /*
     Lu  Uppercase_Letter        an uppercase letter
@@ -64,12 +64,30 @@ static MAX_THREE_B: u32 =  0x10000u32;
 */
 
 /// The highest valid code point
-#[stable]
+#[stable(feature = "rust1", since = "1.0.0")]
 pub const MAX: char = '\u{10ffff}';
 
-/// Converts from `u32` to a `char`
+/// Converts a `u32` to an `Option<char>`.
+///
+/// # Examples
+///
+/// ```
+/// use std::char;
+///
+/// let c = char::from_u32(10084); // produces `Some(❤)`
+/// assert_eq!(c, Some('❤'));
+/// ```
+///
+/// An invalid character:
+///
+/// ```
+/// use std::char;
+///
+/// let none = char::from_u32(1114112);
+/// assert_eq!(none, None);
+/// ```
 #[inline]
-#[stable]
+#[stable(feature = "rust1", since = "1.0.0")]
 pub fn from_u32(i: u32) -> Option<char> {
     // catch out-of-bounds and surrogates
     if (i > MAX as u32) || (i >= 0xD800 && i <= 0xDFFF) {
@@ -79,8 +97,7 @@ pub fn from_u32(i: u32) -> Option<char> {
     }
 }
 
-///
-/// Converts a number to the character representing it
+/// Converts a number to the character representing it.
 ///
 /// # Return value
 ///
@@ -91,18 +108,27 @@ pub fn from_u32(i: u32) -> Option<char> {
 ///
 /// Panics if given an `radix` > 36.
 ///
+/// # Examples
+///
+/// ```
+/// use std::char;
+///
+/// let c = char::from_digit(4, 10);
+///
+/// assert_eq!(c, Some('4'));
+/// ```
 #[inline]
-#[unstable = "pending integer conventions"]
-pub fn from_digit(num: uint, radix: uint) -> Option<char> {
+#[stable(feature = "rust1", since = "1.0.0")]
+pub fn from_digit(num: u32, radix: u32) -> Option<char> {
     if radix > 36 {
         panic!("from_digit: radix is too high (maximum 36)");
     }
     if num < radix {
         unsafe {
             if num < 10 {
-                Some(transmute(('0' as uint + num) as u32))
+                Some(transmute('0' as u32 + num))
             } else {
-                Some(transmute(('a' as uint + num - 10) as u32))
+                Some(transmute('a' as u32 + num - 10))
             }
         }
     } else {
@@ -110,118 +136,44 @@ pub fn from_digit(num: uint, radix: uint) -> Option<char> {
     }
 }
 
-/// Basic `char` manipulations.
-#[stable]
+// NB: the stabilization and documentation for this trait is in
+// unicode/char.rs, not here
+#[allow(missing_docs)] // docs in libunicode/u_char.rs
+#[doc(hidden)]
 pub trait CharExt {
-    /// Checks if a `char` parses as a numeric digit in the given radix.
-    ///
-    /// Compared to `is_numeric()`, this function only recognizes the characters
-    /// `0-9`, `a-z` and `A-Z`.
-    ///
-    /// # Return value
-    ///
-    /// Returns `true` if `c` is a valid digit under `radix`, and `false`
-    /// otherwise.
-    ///
-    /// # Panics
-    ///
-    /// Panics if given a radix > 36.
-    #[unstable = "pending integer conventions"]
-    fn is_digit(self, radix: uint) -> bool;
-
-    /// Converts a character to the corresponding digit.
-    ///
-    /// # Return value
-    ///
-    /// If `c` is between '0' and '9', the corresponding value between 0 and
-    /// 9. If `c` is 'a' or 'A', 10. If `c` is 'b' or 'B', 11, etc. Returns
-    /// none if the character does not refer to a digit in the given radix.
-    ///
-    /// # Panics
-    ///
-    /// Panics if given a radix outside the range [0..36].
-    #[unstable = "pending integer conventions"]
-    fn to_digit(self, radix: uint) -> Option<uint>;
-
-    /// Returns an iterator that yields the hexadecimal Unicode escape
-    /// of a character, as `char`s.
-    ///
-    /// All characters are escaped with Rust syntax of the form `\\u{NNNN}`
-    /// where `NNNN` is the shortest hexadecimal representation of the code
-    /// point.
-    #[stable]
+    fn is_digit(self, radix: u32) -> bool;
+    fn to_digit(self, radix: u32) -> Option<u32>;
     fn escape_unicode(self) -> EscapeUnicode;
-
-    /// Returns an iterator that yields the 'default' ASCII and
-    /// C++11-like literal escape of a character, as `char`s.
-    ///
-    /// The default is chosen with a bias toward producing literals that are
-    /// legal in a variety of languages, including C++11 and similar C-family
-    /// languages. The exact rules are:
-    ///
-    /// * Tab, CR and LF are escaped as '\t', '\r' and '\n' respectively.
-    /// * Single-quote, double-quote and backslash chars are backslash-
-    ///   escaped.
-    /// * Any other chars in the range [0x20,0x7e] are not escaped.
-    /// * Any other chars are given hex Unicode escapes; see `escape_unicode`.
-    #[stable]
     fn escape_default(self) -> EscapeDefault;
-
-    /// Returns the amount of bytes this character would need if encoded in
-    /// UTF-8.
-    #[stable]
-    fn len_utf8(self) -> uint;
-
-    /// Returns the amount of bytes this character would need if encoded in
-    /// UTF-16.
-    #[stable]
-    fn len_utf16(self) -> uint;
-
-    /// Encodes this character as UTF-8 into the provided byte buffer,
-    /// and then returns the number of bytes written.
-    ///
-    /// If the buffer is not large enough, nothing will be written into it
-    /// and a `None` will be returned.
-    #[stable]
-    fn encode_utf8(self, dst: &mut [u8]) -> Option<uint>;
-
-    /// Encodes this character as UTF-16 into the provided `u16` buffer,
-    /// and then returns the number of `u16`s written.
-    ///
-    /// If the buffer is not large enough, nothing will be written into it
-    /// and a `None` will be returned.
-    #[stable]
-    fn encode_utf16(self, dst: &mut [u16]) -> Option<uint>;
+    fn len_utf8(self) -> usize;
+    fn len_utf16(self) -> usize;
+    fn encode_utf8(self, dst: &mut [u8]) -> Option<usize>;
+    fn encode_utf16(self, dst: &mut [u16]) -> Option<usize>;
 }
 
-#[stable]
 impl CharExt for char {
-    #[unstable = "pending integer conventions"]
-    fn is_digit(self, radix: uint) -> bool {
+    fn is_digit(self, radix: u32) -> bool {
         self.to_digit(radix).is_some()
     }
 
-    #[unstable = "pending integer conventions"]
-    fn to_digit(self, radix: uint) -> Option<uint> {
+    fn to_digit(self, radix: u32) -> Option<u32> {
         if radix > 36 {
             panic!("to_digit: radix is too high (maximum 36)");
         }
         let val = match self {
-          '0' ... '9' => self as uint - ('0' as uint),
-          'a' ... 'z' => self as uint + 10 - ('a' as uint),
-          'A' ... 'Z' => self as uint + 10 - ('A' as uint),
+          '0' ... '9' => self as u32 - '0' as u32,
+          'a' ... 'z' => self as u32 - 'a' as u32 + 10,
+          'A' ... 'Z' => self as u32 - 'A' as u32 + 10,
           _ => return None,
         };
         if val < radix { Some(val) }
         else { None }
     }
 
-    #[stable]
     fn escape_unicode(self) -> EscapeUnicode {
         EscapeUnicode { c: self, state: EscapeUnicodeState::Backslash }
     }
 
-    #[stable]
     fn escape_default(self) -> EscapeDefault {
         let init_state = match self {
             '\t' => EscapeDefaultState::Backslash('t'),
@@ -237,33 +189,32 @@ impl CharExt for char {
     }
 
     #[inline]
-    #[stable]
-    fn len_utf8(self) -> uint {
+    fn len_utf8(self) -> usize {
         let code = self as u32;
-        match () {
-            _ if code < MAX_ONE_B   => 1,
-            _ if code < MAX_TWO_B   => 2,
-            _ if code < MAX_THREE_B => 3,
-            _  => 4,
+        if code < MAX_ONE_B {
+            1
+        } else if code < MAX_TWO_B {
+            2
+        } else if code < MAX_THREE_B {
+            3
+        } else {
+            4
         }
     }
 
     #[inline]
-    #[stable]
-    fn len_utf16(self) -> uint {
+    fn len_utf16(self) -> usize {
         let ch = self as u32;
-        if (ch & 0xFFFF_u32) == ch { 1 } else { 2 }
+        if (ch & 0xFFFF) == ch { 1 } else { 2 }
     }
 
     #[inline]
-    #[unstable = "pending decision about Iterator/Writer/Reader"]
-    fn encode_utf8(self, dst: &mut [u8]) -> Option<uint> {
+    fn encode_utf8(self, dst: &mut [u8]) -> Option<usize> {
         encode_utf8_raw(self as u32, dst)
     }
 
     #[inline]
-    #[unstable = "pending decision about Iterator/Writer/Reader"]
-    fn encode_utf16(self, dst: &mut [u16]) -> Option<uint> {
+    fn encode_utf16(self, dst: &mut [u16]) -> Option<usize> {
         encode_utf16_raw(self as u32, dst)
     }
 }
@@ -274,26 +225,25 @@ impl CharExt for char {
 /// If the buffer is not large enough, nothing will be written into it
 /// and a `None` will be returned.
 #[inline]
-#[unstable]
-pub fn encode_utf8_raw(code: u32, dst: &mut [u8]) -> Option<uint> {
+pub fn encode_utf8_raw(code: u32, dst: &mut [u8]) -> Option<usize> {
     // Marked #[inline] to allow llvm optimizing it away
-    if code < MAX_ONE_B && dst.len() >= 1 {
+    if code < MAX_ONE_B && !dst.is_empty() {
         dst[0] = code as u8;
         Some(1)
     } else if code < MAX_TWO_B && dst.len() >= 2 {
-        dst[0] = (code >> 6u & 0x1F_u32) as u8 | TAG_TWO_B;
-        dst[1] = (code & 0x3F_u32) as u8 | TAG_CONT;
+        dst[0] = (code >> 6 & 0x1F) as u8 | TAG_TWO_B;
+        dst[1] = (code & 0x3F) as u8 | TAG_CONT;
         Some(2)
     } else if code < MAX_THREE_B && dst.len() >= 3  {
-        dst[0] = (code >> 12u & 0x0F_u32) as u8 | TAG_THREE_B;
-        dst[1] = (code >>  6u & 0x3F_u32) as u8 | TAG_CONT;
-        dst[2] = (code & 0x3F_u32) as u8 | TAG_CONT;
+        dst[0] = (code >> 12 & 0x0F) as u8 | TAG_THREE_B;
+        dst[1] = (code >>  6 & 0x3F) as u8 | TAG_CONT;
+        dst[2] = (code & 0x3F) as u8 | TAG_CONT;
         Some(3)
     } else if dst.len() >= 4 {
-        dst[0] = (code >> 18u & 0x07_u32) as u8 | TAG_FOUR_B;
-        dst[1] = (code >> 12u & 0x3F_u32) as u8 | TAG_CONT;
-        dst[2] = (code >>  6u & 0x3F_u32) as u8 | TAG_CONT;
-        dst[3] = (code & 0x3F_u32) as u8 | TAG_CONT;
+        dst[0] = (code >> 18 & 0x07) as u8 | TAG_FOUR_B;
+        dst[1] = (code >> 12 & 0x3F) as u8 | TAG_CONT;
+        dst[2] = (code >>  6 & 0x3F) as u8 | TAG_CONT;
+        dst[3] = (code & 0x3F) as u8 | TAG_CONT;
         Some(4)
     } else {
         None
@@ -306,18 +256,17 @@ pub fn encode_utf8_raw(code: u32, dst: &mut [u8]) -> Option<uint> {
 /// If the buffer is not large enough, nothing will be written into it
 /// and a `None` will be returned.
 #[inline]
-#[unstable]
-pub fn encode_utf16_raw(mut ch: u32, dst: &mut [u16]) -> Option<uint> {
+pub fn encode_utf16_raw(mut ch: u32, dst: &mut [u16]) -> Option<usize> {
     // Marked #[inline] to allow llvm optimizing it away
-    if (ch & 0xFFFF_u32) == ch  && dst.len() >= 1 {
+    if (ch & 0xFFFF) == ch && !dst.is_empty() {
         // The BMP falls through (assuming non-surrogate, as it should)
         dst[0] = ch as u16;
         Some(1)
     } else if dst.len() >= 2 {
         // Supplementary planes break into surrogates.
-        ch -= 0x1_0000_u32;
-        dst[0] = 0xD800_u16 | ((ch >> 10) as u16);
-        dst[1] = 0xDC00_u16 | ((ch as u16) & 0x3FF_u16);
+        ch -= 0x1_0000;
+        dst[0] = 0xD800 | ((ch >> 10) as u16);
+        dst[1] = 0xDC00 | ((ch as u16) & 0x3FF);
         Some(2)
     } else {
         None
@@ -327,24 +276,23 @@ pub fn encode_utf16_raw(mut ch: u32, dst: &mut [u16]) -> Option<uint> {
 /// An iterator over the characters that represent a `char`, as escaped by
 /// Rust's unicode escaping rules.
 #[derive(Clone)]
-#[stable]
+#[stable(feature = "rust1", since = "1.0.0")]
 pub struct EscapeUnicode {
     c: char,
     state: EscapeUnicodeState
 }
 
 #[derive(Clone)]
-#[unstable]
 enum EscapeUnicodeState {
     Backslash,
     Type,
     LeftBrace,
-    Value(uint),
+    Value(usize),
     RightBrace,
     Done,
 }
 
-#[stable]
+#[stable(feature = "rust1", since = "1.0.0")]
 impl Iterator for EscapeUnicode {
     type Item = char;
 
@@ -390,13 +338,12 @@ impl Iterator for EscapeUnicode {
 /// An iterator over the characters that represent a `char`, escaped
 /// for maximum portability.
 #[derive(Clone)]
-#[stable]
+#[stable(feature = "rust1", since = "1.0.0")]
 pub struct EscapeDefault {
     state: EscapeDefaultState
 }
 
 #[derive(Clone)]
-#[unstable]
 enum EscapeDefaultState {
     Backslash(char),
     Char(char),
@@ -404,7 +351,7 @@ enum EscapeDefaultState {
     Unicode(EscapeUnicode),
 }
 
-#[stable]
+#[stable(feature = "rust1", since = "1.0.0")]
 impl Iterator for EscapeDefault {
     type Item = char;
 

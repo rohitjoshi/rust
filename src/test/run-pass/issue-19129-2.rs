@@ -8,10 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// pretty-expanded FIXME #23616
+
 trait Trait<Input> {
     type Output;
 
-    fn method() -> bool { false }
+    fn method(&self, i: Input) -> bool { false }
 }
 
 fn main() {}

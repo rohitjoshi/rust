@@ -8,6 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+
 use std::ops::Deref;
 
 struct DerefArray<'a, T:'a> {
@@ -23,6 +24,6 @@ impl<'a, T> Deref for DerefArray<'a, T> {
 }
 
 pub fn main() {
-    let a = &[1i, 2i, 3i];
+    let a = &[1, 2, 3];
     assert_eq!(DerefArray {inner: a}[1], 2);
 }

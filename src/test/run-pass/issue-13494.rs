@@ -11,8 +11,12 @@
 // This test may not always fail, but it can be flaky if the race it used to
 // expose is still present.
 
+// pretty-expanded FIXME #23616
+
+#![feature(std_misc)]
+
 use std::sync::mpsc::{channel, Sender, Receiver};
-use std::thread::Thread;
+use std::thread;
 
 fn helper(rx: Receiver<Sender<()>>) {
     for tx in rx.iter() {
@@ -22,10 +26,10 @@ fn helper(rx: Receiver<Sender<()>>) {
 
 fn main() {
     let (tx, rx) = channel();
-    let _t = Thread::spawn(move|| { helper(rx) });
-    let (snd, rcv) = channel::<int>();
-    for _ in range(1i, 100000i) {
-        snd.send(1i).unwrap();
+    let t = thread::spawn(move|| { helper(rx) });
+    let (snd, rcv) = channel::<isize>();
+    for _ in 1..100000 {
+        snd.send(1).unwrap();
         let (tx2, rx2) = channel();
         tx.send(tx2).unwrap();
         select! {
@@ -33,4 +37,6 @@ fn main() {
             _ = rcv.recv() => ()
         }
     }
+    drop(tx);
+    t.join();
 }

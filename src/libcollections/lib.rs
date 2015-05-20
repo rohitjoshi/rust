@@ -12,42 +12,59 @@
 //!
 //! See [std::collections](../std/collections) for a detailed discussion of collections in Rust.
 
-
+// Do not remove on snapshot creation. Needed for bootstrap. (Issue #22364)
+#![cfg_attr(stage0, feature(custom_attribute))]
 #![crate_name = "collections"]
-#![unstable]
+#![unstable(feature = "collections")]
 #![staged_api]
 #![crate_type = "rlib"]
 #![doc(html_logo_url = "http://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
-       html_favicon_url = "http://www.rust-lang.org/favicon.ico",
+       html_favicon_url = "https://doc.rust-lang.org/favicon.ico",
        html_root_url = "http://doc.rust-lang.org/nightly/",
        html_playground_url = "http://play.rust-lang.org/")]
+#![doc(test(no_crate_inject))]
 
-#![allow(unknown_features)]
-#![feature(unsafe_destructor, slicing_syntax)]
+#![allow(trivial_casts)]
+#![feature(alloc)]
 #![feature(box_syntax)]
+#![feature(box_patterns)]
+#![feature(core)]
+#![feature(lang_items)]
+#![feature(staged_api)]
 #![feature(unboxed_closures)]
-#![allow(unknown_features)] #![feature(int_uint)]
-#![allow(unstable)]
+#![feature(unicode)]
+#![feature(unique)]
+#![feature(unsafe_no_drop_flag, filling_drop)]
+#![feature(step_by)]
+#![feature(str_char)]
+#![feature(str_words)]
+#![feature(slice_patterns)]
+#![feature(debug_builders)]
+#![feature(utf8_error)]
+#![cfg_attr(test, feature(rand, rustc_private, test, hash, collections,
+                          collections_drain, collections_range))]
+#![cfg_attr(test, allow(deprecated))] // rand
+
+#![feature(no_std)]
 #![no_std]
 
 #[macro_use]
 extern crate core;
 
-extern crate unicode;
+extern crate rustc_unicode;
 extern crate alloc;
 
-#[cfg(test)] extern crate test;
 #[cfg(test)] #[macro_use] extern crate std;
-#[cfg(test)] #[macro_use] extern crate log;
+#[cfg(test)] extern crate test;
 
 pub use binary_heap::BinaryHeap;
-pub use bitv::Bitv;
-pub use bitv_set::BitvSet;
+pub use bit_vec::BitVec;
+pub use bit_set::BitSet;
 pub use btree_map::BTreeMap;
 pub use btree_set::BTreeSet;
-pub use dlist::DList;
+pub use linked_list::LinkedList;
 pub use enum_set::EnumSet;
-pub use ring_buf::RingBuf;
+pub use vec_deque::VecDeque;
 pub use string::String;
 pub use vec::Vec;
 pub use vec_map::VecMap;
@@ -61,38 +78,41 @@ mod macros;
 pub mod binary_heap;
 mod bit;
 mod btree;
-pub mod dlist;
+pub mod borrow;
 pub mod enum_set;
-pub mod ring_buf;
+pub mod fmt;
+pub mod linked_list;
+pub mod range;
 pub mod slice;
 pub mod str;
 pub mod string;
 pub mod vec;
+pub mod vec_deque;
 pub mod vec_map;
 
-#[unstable = "RFC 509"]
-pub mod bitv {
-    pub use bit::{Bitv, Iter};
+#[unstable(feature = "collections",
+           reason = "RFC 509")]
+pub mod bit_vec {
+    pub use bit::{BitVec, Iter};
 }
 
-#[unstable = "RFC 509"]
-pub mod bitv_set {
-    pub use bit::{BitvSet, Union, Intersection, Difference, SymmetricDifference};
+#[unstable(feature = "collections",
+           reason = "RFC 509")]
+pub mod bit_set {
+    pub use bit::{BitSet, Union, Intersection, Difference, SymmetricDifference};
     pub use bit::SetIter as Iter;
 }
 
-#[stable]
+#[stable(feature = "rust1", since = "1.0.0")]
 pub mod btree_map {
     pub use btree::map::*;
 }
 
-#[stable]
+#[stable(feature = "rust1", since = "1.0.0")]
 pub mod btree_set {
     pub use btree::set::*;
 }
 
-
-#[cfg(test)] mod bench;
 
 // FIXME(#14344) this shouldn't be necessary
 #[doc(hidden)]
@@ -100,49 +120,11 @@ pub fn fixme_14344_be_sure_to_link_to_collections() {}
 
 #[cfg(not(test))]
 mod std {
-    pub use core::fmt;      // necessary for panic!()
-    pub use core::option;   // necessary for panic!()
-    pub use core::clone;    // derive(Clone)
-    pub use core::cmp;      // derive(Eq, Ord, etc.)
-    pub use core::marker;  // derive(Copy)
-    pub use core::hash;     // derive(Hash)
-}
-
-#[cfg(test)]
-mod prelude {
-    // from core.
-    pub use core::borrow::IntoCow;
-    pub use core::clone::Clone;
-    pub use core::cmp::{PartialEq, Eq, PartialOrd, Ord};
-    pub use core::cmp::Ordering::{Less, Equal, Greater};
-    pub use core::iter::range;
-    pub use core::iter::{FromIterator, Extend, IteratorExt};
-    pub use core::iter::{Iterator, DoubleEndedIterator, RandomAccessIterator};
-    pub use core::iter::{ExactSizeIterator};
-    pub use core::marker::{Copy, Send, Sized, Sync};
-    pub use core::mem::drop;
-    pub use core::ops::{Drop, Fn, FnMut, FnOnce};
-    pub use core::option::Option;
-    pub use core::option::Option::{Some, None};
-    pub use core::ptr::PtrExt;
-    pub use core::result::Result;
-    pub use core::result::Result::{Ok, Err};
-
-    // in core and collections (may differ).
-    pub use slice::{AsSlice, SliceExt};
-    pub use str::{Str, StrExt};
-
-    // from other crates.
-    pub use alloc::boxed::Box;
-    pub use unicode::char::CharExt;
-
-    // from collections.
-    pub use slice::SliceConcatExt;
-    pub use string::{String, ToString};
-    pub use vec::Vec;
+    pub use core::ops;      // RangeFull
 }
 
 /// An endpoint of a range of keys.
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum Bound<T> {
     /// An inclusive bound.
     Included(T),

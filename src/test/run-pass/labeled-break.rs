@@ -8,6 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// pretty-expanded FIXME #23616
+
 pub fn main() {
     'foo: loop {
         loop {
@@ -15,13 +17,13 @@ pub fn main() {
         }
     }
 
-    'bar: for _ in range(0i, 100i) {
+    'bar: for _ in 0..100 {
         loop {
             break 'bar;
         }
     }
 
-    'foobar: while 1i + 1 == 2 {
+    'foobar: while 1 + 1 == 2 {
         loop {
             break 'foobar;
         }

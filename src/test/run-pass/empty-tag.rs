@@ -8,14 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[derive(Show)]
+#[derive(Copy, Clone, Debug)]
 enum chan { chan_t, }
-
-impl Copy for chan {}
 
 impl PartialEq for chan {
     fn eq(&self, other: &chan) -> bool {
-        ((*self) as uint) == ((*other) as uint)
+        ((*self) as usize) == ((*other) as usize)
     }
     fn ne(&self, other: &chan) -> bool { !(*self).eq(other) }
 }
@@ -25,6 +23,6 @@ fn wrapper3(i: chan) {
 }
 
 pub fn main() {
-    let wrapped = {|&:|wrapper3(chan::chan_t)};
+    let wrapped = {||wrapper3(chan::chan_t)};
     wrapped();
 }

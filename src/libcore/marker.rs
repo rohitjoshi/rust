@@ -23,23 +23,41 @@
 //! implemented using unsafe code. In that case, you may want to embed
 //! some of the marker types below into your type.
 
-#![stable]
+#![stable(feature = "rust1", since = "1.0.0")]
 
 use clone::Clone;
+use cmp;
+use option::Option;
+use hash::Hash;
+use hash::Hasher;
 
 /// Types able to be transferred across thread boundaries.
-#[unstable = "will be overhauled with new lifetime rules; see RFC 458"]
-#[lang="send"]
+#[stable(feature = "rust1", since = "1.0.0")]
+#[lang = "send"]
 #[rustc_on_unimplemented = "`{Self}` cannot be sent between threads safely"]
-pub unsafe trait Send: 'static {
+pub unsafe trait Send {
     // empty.
 }
 
+unsafe impl Send for .. { }
+
+impl<T> !Send for *const T { }
+impl<T> !Send for *mut T { }
+
 /// Types with a constant size known at compile-time.
-#[stable]
-#[lang="sized"]
+#[stable(feature = "rust1", since = "1.0.0")]
+#[lang = "sized"]
 #[rustc_on_unimplemented = "`{Self}` does not have a constant size known at compile-time"]
+#[fundamental] // for Default, for example, which requires that `[T]: !Default` be evaluatable
 pub trait Sized {
+    // Empty.
+}
+
+/// Types that can be "unsized" to a dynamically sized type.
+#[unstable(feature = "core")]
+#[cfg(not(stage0))]
+#[lang="unsize"]
+pub trait Unsize<T> {
     // Empty.
 }
 
@@ -49,7 +67,7 @@ pub trait Sized {
 /// words:
 ///
 /// ```
-/// #[derive(Show)]
+/// #[derive(Debug)]
 /// struct Foo;
 ///
 /// let x = Foo;
@@ -65,7 +83,7 @@ pub trait Sized {
 ///
 /// ```
 /// // we can just derive a `Copy` implementation
-/// #[derive(Show, Copy)]
+/// #[derive(Debug, Copy, Clone)]
 /// struct Foo;
 ///
 /// let x = Foo;
@@ -114,7 +132,7 @@ pub trait Sized {
 /// There are two ways to implement `Copy` on your type:
 ///
 /// ```
-/// #[derive(Copy)]
+/// #[derive(Copy, Clone)]
 /// struct MyStruct;
 /// ```
 ///
@@ -123,6 +141,7 @@ pub trait Sized {
 /// ```
 /// struct MyStruct;
 /// impl Copy for MyStruct {}
+/// impl Clone for MyStruct { fn clone(&self) -> MyStruct { *self } }
 /// ```
 ///
 /// There is a small difference between the two: the `derive` strategy will also place a `Copy`
@@ -142,9 +161,9 @@ pub trait Sized {
 /// to consider though: if you think your type may _not_ be able to implement `Copy` in the future,
 /// then it might be prudent to not implement `Copy`. This is because removing `Copy` is a breaking
 /// change: that second example would fail to compile if we made `Foo` non-`Copy`.
-#[stable]
-#[lang="copy"]
-pub trait Copy {
+#[stable(feature = "rust1", since = "1.0.0")]
+#[lang = "copy"]
+pub trait Copy : Clone {
     // Empty.
 }
 
@@ -185,213 +204,218 @@ pub trait Copy {
 /// the `sync` crate do ensure that any mutation cannot cause data
 /// races.  Hence these types are `Sync`.
 ///
-/// Users writing their own types with interior mutability (or anything
-/// else that is not thread-safe) should use the `NoSync` marker type
-/// (from `std::marker`) to ensure that the compiler doesn't
-/// consider the user-defined type to be `Sync`.  Any types with
-/// interior mutability must also use the `std::cell::UnsafeCell` wrapper
-/// around the value(s) which can be mutated when behind a `&`
+/// Any types with interior mutability must also use the `std::cell::UnsafeCell`
+/// wrapper around the value(s) which can be mutated when behind a `&`
 /// reference; not doing this is undefined behaviour (for example,
 /// `transmute`-ing from `&T` to `&mut T` is illegal).
-#[unstable = "will be overhauled with new lifetime rules; see RFC 458"]
-#[lang="sync"]
+#[stable(feature = "rust1", since = "1.0.0")]
+#[lang = "sync"]
 #[rustc_on_unimplemented = "`{Self}` cannot be shared between threads safely"]
 pub unsafe trait Sync {
     // Empty
 }
 
+unsafe impl Sync for .. { }
 
-/// A marker type whose type parameter `T` is considered to be
-/// covariant with respect to the type itself. This is (typically)
-/// used to indicate that an instance of the type `T` is being stored
-/// into memory and read from, even though that may not be apparent.
-///
-/// For more information about variance, refer to this Wikipedia
-/// article <http://en.wikipedia.org/wiki/Variance_%28computer_science%29>.
-///
-/// *Note:* It is very unusual to have to add a covariant constraint.
-/// If you are not sure, you probably want to use `InvariantType`.
-///
-/// # Example
-///
-/// Given a struct `S` that includes a type parameter `T`
-/// but does not actually *reference* that type parameter:
-///
-/// ```ignore
-/// use std::mem;
-///
-/// struct S<T> { x: *() }
-/// fn get<T>(s: &S<T>) -> T {
-///    unsafe {
-///        let x: *T = mem::transmute(s.x);
-///        *x
-///    }
-/// }
-/// ```
-///
-/// The type system would currently infer that the value of
-/// the type parameter `T` is irrelevant, and hence a `S<int>` is
-/// a subtype of `S<Box<int>>` (or, for that matter, `S<U>` for
-/// any `U`). But this is incorrect because `get()` converts the
-/// `*()` into a `*T` and reads from it. Therefore, we should include the
-/// a marker field `CovariantType<T>` to inform the type checker that
-/// `S<T>` is a subtype of `S<U>` if `T` is a subtype of `U`
-/// (for example, `S<&'static int>` is a subtype of `S<&'a int>`
-/// for some lifetime `'a`, but not the other way around).
-#[unstable = "likely to change with new variance strategy"]
-#[lang="covariant_type"]
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
-pub struct CovariantType<T: ?Sized>;
-
-impl<T: ?Sized> Copy for CovariantType<T> {}
-impl<T: ?Sized> Clone for CovariantType<T> {
-    fn clone(&self) -> CovariantType<T> { *self }
-}
-
-/// A marker type whose type parameter `T` is considered to be
-/// contravariant with respect to the type itself. This is (typically)
-/// used to indicate that an instance of the type `T` will be consumed
-/// (but not read from), even though that may not be apparent.
-///
-/// For more information about variance, refer to this Wikipedia
-/// article <http://en.wikipedia.org/wiki/Variance_%28computer_science%29>.
-///
-/// *Note:* It is very unusual to have to add a contravariant constraint.
-/// If you are not sure, you probably want to use `InvariantType`.
-///
-/// # Example
-///
-/// Given a struct `S` that includes a type parameter `T`
-/// but does not actually *reference* that type parameter:
-///
-/// ```
-/// use std::mem;
-///
-/// struct S<T> { x: *const () }
-/// fn get<T>(s: &S<T>, v: T) {
-///    unsafe {
-///        let x: fn(T) = mem::transmute(s.x);
-///        x(v)
-///    }
-/// }
-/// ```
-///
-/// The type system would currently infer that the value of
-/// the type parameter `T` is irrelevant, and hence a `S<int>` is
-/// a subtype of `S<Box<int>>` (or, for that matter, `S<U>` for
-/// any `U`). But this is incorrect because `get()` converts the
-/// `*()` into a `fn(T)` and then passes a value of type `T` to it.
-///
-/// Supplying a `ContravariantType` marker would correct the
-/// problem, because it would mark `S` so that `S<T>` is only a
-/// subtype of `S<U>` if `U` is a subtype of `T`; given that the
-/// function requires arguments of type `T`, it must also accept
-/// arguments of type `U`, hence such a conversion is safe.
-#[unstable = "likely to change with new variance strategy"]
-#[lang="contravariant_type"]
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
-pub struct ContravariantType<T: ?Sized>;
-
-impl<T: ?Sized> Copy for ContravariantType<T> {}
-impl<T: ?Sized> Clone for ContravariantType<T> {
-    fn clone(&self) -> ContravariantType<T> { *self }
-}
-
-/// A marker type whose type parameter `T` is considered to be
-/// invariant with respect to the type itself. This is (typically)
-/// used to indicate that instances of the type `T` may be read or
-/// written, even though that may not be apparent.
-///
-/// For more information about variance, refer to this Wikipedia
-/// article <http://en.wikipedia.org/wiki/Variance_%28computer_science%29>.
-///
-/// # Example
-///
-/// The Cell type is an example which uses unsafe code to achieve
-/// "interior" mutability:
-///
-/// ```
-/// struct Cell<T> { value: T }
-/// ```
-///
-/// The type system would infer that `value` is only read here and
-/// never written, but in fact `Cell` uses unsafe code to achieve
-/// interior mutability.
-#[unstable = "likely to change with new variance strategy"]
-#[lang="invariant_type"]
-#[derive(PartialEq, Eq, PartialOrd, Ord)]
-pub struct InvariantType<T: ?Sized>;
-
-#[unstable = "likely to change with new variance strategy"]
-impl<T: ?Sized> Copy for InvariantType<T> {}
-#[unstable = "likely to change with new variance strategy"]
-impl<T: ?Sized> Clone for InvariantType<T> {
-    fn clone(&self) -> InvariantType<T> { *self }
-}
-
-/// As `CovariantType`, but for lifetime parameters. Using
-/// `CovariantLifetime<'a>` indicates that it is ok to substitute
-/// a *longer* lifetime for `'a` than the one you originally
-/// started with (e.g., you could convert any lifetime `'foo` to
-/// `'static`). You almost certainly want `ContravariantLifetime`
-/// instead, or possibly `InvariantLifetime`. The only case where
-/// it would be appropriate is that you have a (type-casted, and
-/// hence hidden from the type system) function pointer with a
-/// signature like `fn(&'a T)` (and no other uses of `'a`). In
-/// this case, it is ok to substitute a larger lifetime for `'a`
-/// (e.g., `fn(&'static T)`), because the function is only
-/// becoming more selective in terms of what it accepts as
-/// argument.
-///
-/// For more information about variance, refer to this Wikipedia
-/// article <http://en.wikipedia.org/wiki/Variance_%28computer_science%29>.
-#[unstable = "likely to change with new variance strategy"]
-#[lang="covariant_lifetime"]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct CovariantLifetime<'a>;
-
-/// As `ContravariantType`, but for lifetime parameters. Using
-/// `ContravariantLifetime<'a>` indicates that it is ok to
-/// substitute a *shorter* lifetime for `'a` than the one you
-/// originally started with (e.g., you could convert `'static` to
-/// any lifetime `'foo`). This is appropriate for cases where you
-/// have an unsafe pointer that is actually a pointer into some
-/// memory with lifetime `'a`, and thus you want to limit the
-/// lifetime of your data structure to `'a`. An example of where
-/// this is used is the iterator for vectors.
-///
-/// For more information about variance, refer to this Wikipedia
-/// article <http://en.wikipedia.org/wiki/Variance_%28computer_science%29>.
-#[unstable = "likely to change with new variance strategy"]
-#[lang="contravariant_lifetime"]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct ContravariantLifetime<'a>;
-
-/// As `InvariantType`, but for lifetime parameters. Using
-/// `InvariantLifetime<'a>` indicates that it is not ok to
-/// substitute any other lifetime for `'a` besides its original
-/// value. This is appropriate for cases where you have an unsafe
-/// pointer that is actually a pointer into memory with lifetime `'a`,
-/// and this pointer is itself stored in an inherently mutable
-/// location (such as a `Cell`).
-#[unstable = "likely to change with new variance strategy"]
-#[lang="invariant_lifetime"]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct InvariantLifetime<'a>;
+impl<T> !Sync for *const T { }
+impl<T> !Sync for *mut T { }
 
 /// A type which is considered "not POD", meaning that it is not
 /// implicitly copyable. This is typically embedded in other types to
 /// ensure that they are never copied, even if they lack a destructor.
-#[unstable = "likely to change with new variance strategy"]
-#[lang="no_copy_bound"]
+#[unstable(feature = "core",
+           reason = "likely to change with new variance strategy")]
+#[lang = "no_copy_bound"]
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-#[allow(missing_copy_implementations)]
 pub struct NoCopy;
 
-/// A type which is considered managed by the GC. This is typically
-/// embedded in other types.
-#[unstable = "likely to change with new variance strategy"]
-#[lang="managed_bound"]
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
-#[allow(missing_copy_implementations)]
-pub struct Managed;
+macro_rules! impls{
+    ($t: ident) => (
+        impl<T:?Sized> Hash for $t<T> {
+            #[inline]
+            fn hash<H: Hasher>(&self, _: &mut H) {
+            }
+        }
+
+        impl<T:?Sized> cmp::PartialEq for $t<T> {
+            fn eq(&self, _other: &$t<T>) -> bool {
+                true
+            }
+        }
+
+        impl<T:?Sized> cmp::Eq for $t<T> {
+        }
+
+        impl<T:?Sized> cmp::PartialOrd for $t<T> {
+            fn partial_cmp(&self, _other: &$t<T>) -> Option<cmp::Ordering> {
+                Option::Some(cmp::Ordering::Equal)
+            }
+        }
+
+        impl<T:?Sized> cmp::Ord for $t<T> {
+            fn cmp(&self, _other: &$t<T>) -> cmp::Ordering {
+                cmp::Ordering::Equal
+            }
+        }
+
+        impl<T:?Sized> Copy for $t<T> { }
+
+        impl<T:?Sized> Clone for $t<T> {
+            fn clone(&self) -> $t<T> {
+                $t
+            }
+        }
+        )
+}
+
+/// `PhantomData<T>` allows you to describe that a type acts as if it stores a value of type `T`,
+/// even though it does not. This allows you to inform the compiler about certain safety properties
+/// of your code.
+///
+/// Though they both have scary names, `PhantomData<T>` and "phantom types" are unrelated. 👻👻👻
+///
+/// # Examples
+///
+/// ## Unused lifetime parameter
+///
+/// Perhaps the most common time that `PhantomData` is required is
+/// with a struct that has an unused lifetime parameter, typically as
+/// part of some unsafe code. For example, here is a struct `Slice`
+/// that has two pointers of type `*const T`, presumably pointing into
+/// an array somewhere:
+///
+/// ```ignore
+/// struct Slice<'a, T> {
+///     start: *const T,
+///     end: *const T,
+/// }
+/// ```
+///
+/// The intention is that the underlying data is only valid for the
+/// lifetime `'a`, so `Slice` should not outlive `'a`. However, this
+/// intent is not expressed in the code, since there are no uses of
+/// the lifetime `'a` and hence it is not clear what data it applies
+/// to. We can correct this by telling the compiler to act *as if* the
+/// `Slice` struct contained a borrowed reference `&'a T`:
+///
+/// ```
+/// use std::marker::PhantomData;
+///
+/// struct Slice<'a, T:'a> {
+///     start: *const T,
+///     end: *const T,
+///     phantom: PhantomData<&'a T>
+/// }
+/// ```
+///
+/// This also in turn requires that we annotate `T:'a`, indicating
+/// that `T` is a type that can be borrowed for the lifetime `'a`.
+///
+/// ## Unused type parameters
+///
+/// It sometimes happens that there are unused type parameters that
+/// indicate what type of data a struct is "tied" to, even though that
+/// data is not actually found in the struct itself. Here is an
+/// example where this arises when handling external resources over a
+/// foreign function interface. `PhantomData<T>` can prevent
+/// mismatches by enforcing types in the method implementations:
+///
+/// ```
+/// # trait ResType { fn foo(&self); }
+/// # struct ParamType;
+/// # mod foreign_lib {
+/// # pub fn new(_: usize) -> *mut () { 42 as *mut () }
+/// # pub fn do_stuff(_: *mut (), _: usize) {}
+/// # }
+/// # fn convert_params(_: ParamType) -> usize { 42 }
+/// use std::marker::PhantomData;
+/// use std::mem;
+///
+/// struct ExternalResource<R> {
+///    resource_handle: *mut (),
+///    resource_type: PhantomData<R>,
+/// }
+///
+/// impl<R: ResType> ExternalResource<R> {
+///     fn new() -> ExternalResource<R> {
+///         let size_of_res = mem::size_of::<R>();
+///         ExternalResource {
+///             resource_handle: foreign_lib::new(size_of_res),
+///             resource_type: PhantomData,
+///         }
+///     }
+///
+///     fn do_stuff(&self, param: ParamType) {
+///         let foreign_params = convert_params(param);
+///         foreign_lib::do_stuff(self.resource_handle, foreign_params);
+///     }
+/// }
+/// ```
+///
+/// ## Indicating ownership
+///
+/// Adding a field of type `PhantomData<T>` also indicates that your
+/// struct owns data of type `T`. This in turn implies that when your
+/// struct is dropped, it may in turn drop one or more instances of
+/// the type `T`, though that may not be apparent from the other
+/// structure of the type itself. This is commonly necessary if the
+/// structure is using an unsafe pointer like `*mut T` whose referent
+/// may be dropped when the type is dropped, as a `*mut T` is
+/// otherwise not treated as owned.
+///
+/// If your struct does not in fact *own* the data of type `T`, it is
+/// better to use a reference type, like `PhantomData<&'a T>`
+/// (ideally) or `PhantomData<*const T>` (if no lifetime applies), so
+/// as not to indicate ownership.
+#[lang = "phantom_data"]
+#[stable(feature = "rust1", since = "1.0.0")]
+pub struct PhantomData<T:?Sized>;
+
+impls! { PhantomData }
+
+mod impls {
+    use super::{Send, Sync, Sized};
+
+    unsafe impl<'a, T: Sync + ?Sized> Send for &'a T {}
+    unsafe impl<'a, T: Send + ?Sized> Send for &'a mut T {}
+}
+
+/// A marker trait indicates a type that can be reflected over. This
+/// trait is implemented for all types. Its purpose is to ensure that
+/// when you write a generic function that will employ reflection,
+/// that must be reflected (no pun intended) in the generic bounds of
+/// that function. Here is an example:
+///
+/// ```
+/// #![feature(core)]
+/// use std::marker::Reflect;
+/// use std::any::Any;
+/// fn foo<T:Reflect+'static>(x: &T) {
+///     let any: &Any = x;
+///     if any.is::<u32>() { println!("u32"); }
+/// }
+/// ```
+///
+/// Without the declaration `T:Reflect`, `foo` would not type check
+/// (note: as a matter of style, it would be preferable to to write
+/// `T:Any`, because `T:Any` implies `T:Reflect` and `T:'static`, but
+/// we use `Reflect` here to show how it works). The `Reflect` bound
+/// thus serves to alert `foo`'s caller to the fact that `foo` may
+/// behave differently depending on whether `T=u32` or not. In
+/// particular, thanks to the `Reflect` bound, callers know that a
+/// function declared like `fn bar<T>(...)` will always act in
+/// precisely the same way no matter what type `T` is supplied,
+/// because there are no bounds declared on `T`. (The ability for a
+/// caller to reason about what a function may do based solely on what
+/// generic bounds are declared is often called the ["parametricity
+/// property"][1].)
+///
+/// [1]: http://en.wikipedia.org/wiki/Parametricity
+#[rustc_reflect_like]
+#[unstable(feature = "core", reason = "requires RFC and more experience")]
+#[allow(deprecated)]
+#[rustc_on_unimplemented = "`{Self}` does not implement `Any`; \
+                            ensure all type parameters are bounded by `Any`"]
+pub trait Reflect {}
+
+impl Reflect for .. { }

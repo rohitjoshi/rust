@@ -15,11 +15,12 @@ trait vec_monad<A> {
 impl<A> vec_monad<A> for Vec<A> {
     fn bind<B, F>(&self, mut f: F) where F: FnMut(A) -> Vec<B> {
         let mut r = panic!();
-        for elt in self.iter() { r = r + f(*elt); }
-        //~^ ERROR the type of this value must be known
+        for elt in self { r = r + f(*elt); }
+        //~^ ERROR E0277
+        //~| ERROR E0277
    }
 }
 fn main() {
-    ["hi"].bind(|&mut: x| [x] );
-    //~^ ERROR type `[&str; 1]` does not implement any method in scope named `bind`
+    ["hi"].bind(|x| [x] );
+    //~^ ERROR no method named `bind` found for type `[&str; 1]` in the current scope
 }

@@ -15,25 +15,25 @@
 // - Multiple lifetime parameters
 // - Arenas
 
+#![feature(rustc_private, libc, collections)]
+
 extern crate arena;
 extern crate collections;
 extern crate libc;
 
 use TypeStructure::{TypeInt, TypeFunction};
 use AstKind::{ExprInt, ExprVar, ExprLambda};
-use arena::Arena;
+use arena::TypedArena;
 use std::collections::HashMap;
 use std::mem;
 
 type Type<'tcx> = &'tcx TypeStructure<'tcx>;
 
-#[derive(Show)]
+#[derive(Copy, Clone, Debug)]
 enum TypeStructure<'tcx> {
     TypeInt,
     TypeFunction(Type<'tcx>, Type<'tcx>),
 }
-
-impl<'tcx> Copy for TypeStructure<'tcx> {}
 
 impl<'tcx> PartialEq for TypeStructure<'tcx> {
     fn eq(&self, other: &TypeStructure<'tcx>) -> bool {
@@ -47,17 +47,20 @@ impl<'tcx> PartialEq for TypeStructure<'tcx> {
 
 impl<'tcx> Eq for TypeStructure<'tcx> {}
 
+type TyArena<'tcx> = TypedArena<TypeStructure<'tcx>>;
+type AstArena<'ast> = TypedArena<AstStructure<'ast>>;
+
 struct TypeContext<'tcx, 'ast> {
-    ty_arena: &'tcx Arena,
+    ty_arena: &'tcx TyArena<'tcx>,
     types: Vec<Type<'tcx>> ,
     type_table: HashMap<NodeId, Type<'tcx>>,
 
-    ast_arena: &'ast Arena,
-    ast_counter: uint,
+    ast_arena: &'ast AstArena<'ast>,
+    ast_counter: usize,
 }
 
 impl<'tcx,'ast> TypeContext<'tcx, 'ast> {
-    fn new(ty_arena: &'tcx Arena, ast_arena: &'ast Arena)
+    fn new(ty_arena: &'tcx TyArena<'tcx>, ast_arena: &'ast AstArena<'ast>)
            -> TypeContext<'tcx, 'ast> {
         TypeContext { ty_arena: ty_arena,
                       types: Vec::new(),
@@ -68,13 +71,13 @@ impl<'tcx,'ast> TypeContext<'tcx, 'ast> {
     }
 
     fn add_type(&mut self, s: TypeStructure<'tcx>) -> Type<'tcx> {
-        for &ty in self.types.iter() {
+        for &ty in &self.types {
             if *ty == s {
                 return ty;
             }
         }
 
-        let ty = self.ty_arena.alloc(|| s);
+        let ty = self.ty_arena.alloc(s);
         self.types.push(ty);
         ty
     }
@@ -87,33 +90,29 @@ impl<'tcx,'ast> TypeContext<'tcx, 'ast> {
     fn ast(&mut self, a: AstKind<'ast>) -> Ast<'ast> {
         let id = self.ast_counter;
         self.ast_counter += 1;
-        self.ast_arena.alloc(|| AstStructure { id: NodeId {id:id}, kind: a })
+        self.ast_arena.alloc(AstStructure { id: NodeId {id:id}, kind: a })
     }
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 struct NodeId {
-    id: uint
+    id: usize
 }
-
-impl Copy for NodeId {}
 
 type Ast<'ast> = &'ast AstStructure<'ast>;
 
+#[derive(Copy, Clone)]
 struct AstStructure<'ast> {
     id: NodeId,
     kind: AstKind<'ast>
 }
 
-impl<'ast> Copy for AstStructure<'ast> {}
-
+#[derive(Copy, Clone)]
 enum AstKind<'ast> {
     ExprInt,
-    ExprVar(uint),
+    ExprVar(usize),
     ExprLambda(Ast<'ast>),
 }
-
-impl<'ast> Copy for AstKind<'ast> {}
 
 fn compute_types<'tcx,'ast>(tcx: &mut TypeContext<'tcx,'ast>,
                             ast: Ast<'ast>) -> Type<'tcx>
@@ -133,8 +132,8 @@ fn compute_types<'tcx,'ast>(tcx: &mut TypeContext<'tcx,'ast>,
 }
 
 pub fn main() {
-    let ty_arena = arena::Arena::new();
-    let ast_arena = arena::Arena::new();
+    let ty_arena = TypedArena::new();
+    let ast_arena = TypedArena::new();
     let mut tcx = TypeContext::new(&ty_arena, &ast_arena);
     let ast = tcx.ast(ExprInt);
     let ty = compute_types(&mut tcx, ast);

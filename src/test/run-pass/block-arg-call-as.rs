@@ -8,11 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-fn asBlock<F>(f: F) -> uint where F: FnOnce() -> uint {
+
+fn asBlock<F>(f: F) -> usize where F: FnOnce() -> usize {
    return f();
 }
 
 pub fn main() {
-   let x = asBlock(|| 22u);
-   assert_eq!(x, 22u);
+   let x = asBlock(|| 22);
+   assert_eq!(x, 22);
 }

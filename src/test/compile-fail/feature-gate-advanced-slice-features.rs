@@ -8,12 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#![feature(slice_patterns)]
+
 fn main() {
-    let x = [ 1is, 2, 3, 4, 5 ];
+    let x = [ 1, 2, 3, 4, 5 ];
     match x {
         [ xs.., 4, 5 ] => {}    //~ ERROR multiple-element slice matches
         [ 1, xs.., 5 ] => {}    //~ ERROR multiple-element slice matches
         [ 1, 2, xs.. ] => {}    // OK without feature gate
     }
 }
-

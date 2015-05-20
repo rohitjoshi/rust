@@ -31,8 +31,8 @@ impl Node for Stuff {
 }
 
 fn iterate<N: Node, G: Graph<N>>(graph: &G) {
-    for node in graph.iter() { //~ ERROR does not implement any method in scope named
-        node.zomg();
+    for node in graph.iter() { //~ ERROR no method named `iter` found
+        node.zomg();  //~ error: the type of this value must be known in this context
     }
 }
 

@@ -14,14 +14,14 @@
 fn test() -> _ { 5 }
 //~^ ERROR the type placeholder `_` is not allowed within types on item signatures
 
-fn test2() -> (_, _) { (5us, 5us) }
+fn test2() -> (_, _) { (5, 5) }
 //~^ ERROR the type placeholder `_` is not allowed within types on item signatures
 //~^^ ERROR the type placeholder `_` is not allowed within types on item signatures
 
 static TEST3: _ = "test";
 //~^ ERROR the type placeholder `_` is not allowed within types on item signatures
 
-static TEST4: _ = 145u16;
+static TEST4: _ = 145;
 //~^ ERROR the type placeholder `_` is not allowed within types on item signatures
 
 static TEST5: (_, _) = (1, 2);
@@ -67,14 +67,14 @@ pub fn main() {
     fn fn_test() -> _ { 5 }
     //~^ ERROR the type placeholder `_` is not allowed within types on item signatures
 
-    fn fn_test2() -> (_, _) { (5us, 5us) }
+    fn fn_test2() -> (_, _) { (5, 5) }
     //~^ ERROR the type placeholder `_` is not allowed within types on item signatures
     //~^^ ERROR the type placeholder `_` is not allowed within types on item signatures
 
     static FN_TEST3: _ = "test";
     //~^ ERROR the type placeholder `_` is not allowed within types on item signatures
 
-    static FN_TEST4: _ = 145u16;
+    static FN_TEST4: _ = 145;
     //~^ ERROR the type placeholder `_` is not allowed within types on item signatures
 
     static FN_TEST5: (_, _) = (1, 2);

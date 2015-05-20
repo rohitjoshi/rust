@@ -8,12 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub struct Foo {
-    f1: int,
-    _f2: int,
-}
 
-impl Copy for Foo {}
+#[derive(Copy, Clone)]
+pub struct Foo {
+    f1: isize,
+    _f2: isize,
+}
 
 #[inline(never)]
 pub fn foo(f: &mut Foo) -> Foo {

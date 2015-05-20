@@ -1,4 +1,4 @@
-// Copyright 2013 The Rust Project Developers. See the COPYRIGHT
+// Copyright 2013-2015 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -12,7 +12,7 @@
 //! the standard library This varies per-platform, but these libraries are
 //! necessary for running libstd.
 
-#![unstable]
+#![unstable(feature = "std_misc")]
 
 // All platforms need to link to rustrt
 #[cfg(not(test))]
@@ -24,7 +24,7 @@ extern {}
 //
 // On Linux, librt and libdl are indirect dependencies via std,
 // and binutils 2.22+ won't add them automatically
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", not(target_env = "musl")))]
 #[link(name = "dl")]
 #[link(name = "pthread")]
 extern {}
@@ -39,7 +39,9 @@ extern {}
 #[link(name = "pthread")]
 extern {}
 
-#[cfg(target_os = "dragonfly")]
+#[cfg(any(target_os = "dragonfly",
+          target_os = "bitrig",
+          target_os = "openbsd"))]
 #[link(name = "pthread")]
 extern {}
 

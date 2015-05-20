@@ -8,6 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// pretty-expanded FIXME #23616
+
 #![feature(unboxed_closures)]
 #![deny(unused_mut)]
 
@@ -16,23 +18,23 @@
 // mutably so we do not get a spurious warning about it not needing to
 // be declared mutable (issue #18336 and #18769)
 
-fn set(x: &mut uint) { *x = 42; }
+fn set(x: &mut usize) { *x = 42; }
 
 fn main() {
     {
-        let mut x = 0u;
-        move |&mut:| x += 1;
+        let mut x = 0_usize;
+        move || x += 1;
     }
     {
-        let mut x = 0u;
-        move |:| x += 1;
+        let mut x = 0_usize;
+        move || x += 1;
     }
     {
-        let mut x = 0u;
-        move |&mut:| set(&mut x);
+        let mut x = 0_usize;
+        move || set(&mut x);
     }
     {
-        let mut x = 0u;
-        move |:| set(&mut x);
+        let mut x = 0_usize;
+        move || set(&mut x);
     }
 }

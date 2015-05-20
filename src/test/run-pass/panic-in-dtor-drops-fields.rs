@@ -8,7 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::thread::Thread;
+
+use std::thread;
 
 static mut dropped: bool = false;
 
@@ -17,7 +18,7 @@ struct A {
 }
 
 struct B {
-    foo: int,
+    foo: isize,
 }
 
 impl Drop for A {
@@ -33,7 +34,7 @@ impl Drop for B {
 }
 
 pub fn main() {
-    let ret = Thread::scoped(move|| {
+    let ret = thread::spawn(move|| {
         let _a = A { b: B { foo: 3 } };
     }).join();
     assert!(ret.is_err());

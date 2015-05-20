@@ -7,8 +7,6 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-//
-// ignore-lexer-test FIXME #15679
 
 #[test]
 fn test_is_lowercase() {
@@ -41,51 +39,63 @@ fn test_is_whitespace() {
 
 #[test]
 fn test_to_digit() {
-    assert_eq!('0'.to_digit(10u), Some(0u));
-    assert_eq!('1'.to_digit(2u), Some(1u));
-    assert_eq!('2'.to_digit(3u), Some(2u));
-    assert_eq!('9'.to_digit(10u), Some(9u));
-    assert_eq!('a'.to_digit(16u), Some(10u));
-    assert_eq!('A'.to_digit(16u), Some(10u));
-    assert_eq!('b'.to_digit(16u), Some(11u));
-    assert_eq!('B'.to_digit(16u), Some(11u));
-    assert_eq!('z'.to_digit(36u), Some(35u));
-    assert_eq!('Z'.to_digit(36u), Some(35u));
-    assert_eq!(' '.to_digit(10u), None);
-    assert_eq!('$'.to_digit(36u), None);
+    assert_eq!('0'.to_digit(10), Some(0));
+    assert_eq!('1'.to_digit(2), Some(1));
+    assert_eq!('2'.to_digit(3), Some(2));
+    assert_eq!('9'.to_digit(10), Some(9));
+    assert_eq!('a'.to_digit(16), Some(10));
+    assert_eq!('A'.to_digit(16), Some(10));
+    assert_eq!('b'.to_digit(16), Some(11));
+    assert_eq!('B'.to_digit(16), Some(11));
+    assert_eq!('z'.to_digit(36), Some(35));
+    assert_eq!('Z'.to_digit(36), Some(35));
+    assert_eq!(' '.to_digit(10), None);
+    assert_eq!('$'.to_digit(36), None);
 }
 
 #[test]
 fn test_to_lowercase() {
-    assert_eq!('A'.to_lowercase(), 'a');
-    assert_eq!('Ö'.to_lowercase(), 'ö');
-    assert_eq!('ß'.to_lowercase(), 'ß');
-    assert_eq!('Ü'.to_lowercase(), 'ü');
-    assert_eq!('💩'.to_lowercase(), '💩');
-    assert_eq!('Σ'.to_lowercase(), 'σ');
-    assert_eq!('Τ'.to_lowercase(), 'τ');
-    assert_eq!('Ι'.to_lowercase(), 'ι');
-    assert_eq!('Γ'.to_lowercase(), 'γ');
-    assert_eq!('Μ'.to_lowercase(), 'μ');
-    assert_eq!('Α'.to_lowercase(), 'α');
-    assert_eq!('Σ'.to_lowercase(), 'σ');
+    fn lower(c: char) -> char {
+        let mut it = c.to_lowercase();
+        let c = it.next().unwrap();
+        assert!(it.next().is_none());
+        c
+    }
+    assert_eq!(lower('A'), 'a');
+    assert_eq!(lower('Ö'), 'ö');
+    assert_eq!(lower('ß'), 'ß');
+    assert_eq!(lower('Ü'), 'ü');
+    assert_eq!(lower('💩'), '💩');
+    assert_eq!(lower('Σ'), 'σ');
+    assert_eq!(lower('Τ'), 'τ');
+    assert_eq!(lower('Ι'), 'ι');
+    assert_eq!(lower('Γ'), 'γ');
+    assert_eq!(lower('Μ'), 'μ');
+    assert_eq!(lower('Α'), 'α');
+    assert_eq!(lower('Σ'), 'σ');
 }
 
 #[test]
 fn test_to_uppercase() {
-    assert_eq!('a'.to_uppercase(), 'A');
-    assert_eq!('ö'.to_uppercase(), 'Ö');
-    assert_eq!('ß'.to_uppercase(), 'ß'); // not ẞ: Latin capital letter sharp s
-    assert_eq!('ü'.to_uppercase(), 'Ü');
-    assert_eq!('💩'.to_uppercase(), '💩');
+    fn upper(c: char) -> char {
+        let mut it = c.to_uppercase();
+        let c = it.next().unwrap();
+        assert!(it.next().is_none());
+        c
+    }
+    assert_eq!(upper('a'), 'A');
+    assert_eq!(upper('ö'), 'Ö');
+    assert_eq!(upper('ß'), 'ß'); // not ẞ: Latin capital letter sharp s
+    assert_eq!(upper('ü'), 'Ü');
+    assert_eq!(upper('💩'), '💩');
 
-    assert_eq!('σ'.to_uppercase(), 'Σ');
-    assert_eq!('τ'.to_uppercase(), 'Τ');
-    assert_eq!('ι'.to_uppercase(), 'Ι');
-    assert_eq!('γ'.to_uppercase(), 'Γ');
-    assert_eq!('μ'.to_uppercase(), 'Μ');
-    assert_eq!('α'.to_uppercase(), 'Α');
-    assert_eq!('ς'.to_uppercase(), 'Σ');
+    assert_eq!(upper('σ'), 'Σ');
+    assert_eq!(upper('τ'), 'Τ');
+    assert_eq!(upper('ι'), 'Ι');
+    assert_eq!(upper('γ'), 'Γ');
+    assert_eq!(upper('μ'), 'Μ');
+    assert_eq!(upper('α'), 'Α');
+    assert_eq!(upper('ς'), 'Σ');
 }
 
 #[test]
@@ -165,8 +175,8 @@ fn test_escape_unicode() {
 #[test]
 fn test_encode_utf8() {
     fn check(input: char, expect: &[u8]) {
-        let mut buf = [0u8; 4];
-        let n = input.encode_utf8(buf.as_mut_slice()).unwrap_or(0);
+        let mut buf = [0; 4];
+        let n = input.encode_utf8(&mut buf).unwrap_or(0);
         assert_eq!(&buf[..n], expect);
     }
 
@@ -179,8 +189,8 @@ fn test_encode_utf8() {
 #[test]
 fn test_encode_utf16() {
     fn check(input: char, expect: &[u16]) {
-        let mut buf = [0u16; 2];
-        let n = input.encode_utf16(buf.as_mut_slice()).unwrap_or(0);
+        let mut buf = [0; 2];
+        let n = input.encode_utf16(&mut buf).unwrap_or(0);
         assert_eq!(&buf[..n], expect);
     }
 
@@ -198,6 +208,7 @@ fn test_len_utf16() {
     assert!('\u{1f4a9}'.len_utf16() == 2);
 }
 
+#[allow(deprecated)]
 #[test]
 fn test_width() {
     assert_eq!('\x00'.width(false),Some(0));

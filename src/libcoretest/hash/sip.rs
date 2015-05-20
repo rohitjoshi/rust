@@ -100,8 +100,8 @@ fn test_siphash() {
         [ 0x72, 0x45, 0x06, 0xeb, 0x4c, 0x32, 0x8a, 0x95, ]
     ];
 
-    let k0 = 0x_07_06_05_04_03_02_01_00_u64;
-    let k1 = 0x_0f_0e_0d_0c_0b_0a_09_08_u64;
+    let k0 = 0x_07_06_05_04_03_02_01_00;
+    let k1 = 0x_0f_0e_0d_0c_0b_0a_09_08;
     let mut buf = Vec::new();
     let mut t = 0;
     let mut state_inc = SipState::new_with_keys(k0, k1);
@@ -109,8 +109,8 @@ fn test_siphash() {
 
     fn to_hex_str(r: &[u8; 8]) -> String {
         let mut s = String::new();
-        for b in r.iter() {
-            s.push_str(format!("{}", fmt::radix(*b, 16)).as_slice());
+        for b in r {
+            s.push_str(format!("{}", fmt::radix(*b, 16)));
         }
         s
     }
@@ -130,8 +130,8 @@ fn test_siphash() {
     fn result_str(h: u64) -> String {
         let r = result_bytes(h);
         let mut s = String::new();
-        for b in r.iter() {
-            s.push_str(format!("{}", fmt::radix(*b, 16)).as_slice());
+        for b in &r {
+            s.push_str(format!("{}", fmt::radix(*b, 16)));
         }
         s
     }
@@ -139,12 +139,12 @@ fn test_siphash() {
     while t < 64 {
         debug!("siphash test {}: {}", t, buf);
         let vec = u8to64_le!(vecs[t], 0);
-        let out = hash_with_keys(k0, k1, &Bytes(buf.as_slice()));
+        let out = hash_with_keys(k0, k1, &Bytes(buf));
         debug!("got {}, expected {}", out, vec);
         assert_eq!(vec, out);
 
         state_full.reset();
-        state_full.write(buf.as_slice());
+        state_full.write(buf);
         let f = result_str(state_full.result());
         let i = result_str(state_inc.result());
         let v = to_hex_str(&vecs[t]);
@@ -230,8 +230,8 @@ fn test_hash_no_concat_alias() {
     assert!(s != t && t != u);
     assert!(hash(&s) != hash(&t) && hash(&s) != hash(&u));
 
-    let v: (&[u8], &[u8], &[u8]) = (&[1u8], &[0u8, 0], &[0u8]);
-    let w: (&[u8], &[u8], &[u8]) = (&[1u8, 0, 0, 0], &[], &[]);
+    let v: (&[u8], &[u8], &[u8]) = (&[1], &[0, 0], &[0]);
+    let w: (&[u8], &[u8], &[u8]) = (&[1, 0, 0, 0], &[], &[]);
 
     assert!(v != w);
     assert!(hash(&v) != hash(&w));

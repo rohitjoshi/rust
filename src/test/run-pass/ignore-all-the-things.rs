@@ -8,10 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(advanced_slice_patterns)]
+// pretty-expanded FIXME #23616
 
-struct Foo(int, int, int, int);
-struct Bar{a: int, b: int, c: int, d: int}
+#![feature(advanced_slice_patterns)]
+#![feature(slice_patterns)]
+
+struct Foo(isize, isize, isize, isize);
+struct Bar{a: isize, b: isize, c: isize, d: isize}
 
 pub fn main() {
     let Foo(..) = Foo(5, 5, 5, 5);
@@ -23,28 +26,28 @@ pub fn main() {
     //let (a, b, ..) = (5, 5, 5, 5);
     //let (.., c, d) = (5, 5, 5, 5);
     let Bar{b: b, ..} = Bar{a: 5, b: 5, c: 5, d: 5};
-    match [5i, 5, 5, 5] {
+    match [5, 5, 5, 5] {
         [..] => { }
     }
-    match [5i, 5, 5, 5] {
+    match [5, 5, 5, 5] {
         [a, ..] => { }
     }
-    match [5i, 5, 5, 5] {
+    match [5, 5, 5, 5] {
         [.., b] => { }
     }
-    match [5i, 5, 5, 5] {
+    match [5, 5, 5, 5] {
         [a, .., b] => { }
     }
-    match [5i, 5, 5] {
+    match [5, 5, 5] {
         [..] => { }
     }
-    match [5i, 5, 5] {
+    match [5, 5, 5] {
         [a, ..] => { }
     }
-    match [5i, 5, 5] {
+    match [5, 5, 5] {
         [.., a] => { }
     }
-    match [5i, 5, 5] {
+    match [5, 5, 5] {
         [a, .., b] => { }
     }
 }

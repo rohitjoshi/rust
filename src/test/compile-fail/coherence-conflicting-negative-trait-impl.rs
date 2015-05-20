@@ -12,16 +12,16 @@
 
 trait MyTrait {}
 
-struct TestType<T>;
+struct TestType<T>(::std::marker::PhantomData<T>);
 
-unsafe impl<T: MyTrait> Send for TestType<T> {}
+unsafe impl<T: MyTrait+'static> Send for TestType<T> {}
 //~^ ERROR conflicting implementations for trait `core::marker::Send`
 //~^^ ERROR conflicting implementations for trait `core::marker::Send`
 
 impl<T: MyTrait> !Send for TestType<T> {}
 //~^ ERROR conflicting implementations for trait `core::marker::Send`
 
-unsafe impl<T> Send for TestType<T> {}
+unsafe impl<T:'static> Send for TestType<T> {}
 //~^ ERROR error: conflicting implementations for trait `core::marker::Send`
 
 impl !Send for TestType<i32> {}

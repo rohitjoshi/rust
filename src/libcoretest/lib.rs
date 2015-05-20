@@ -8,23 +8,35 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![feature(unsafe_destructor, slicing_syntax)]
-#![feature(unboxed_closures)]
+// Do not remove on snapshot creation. Needed for bootstrap. (Issue #22364)
+#![cfg_attr(stage0, feature(custom_attribute))]
+
 #![feature(box_syntax)]
-#![allow(unknown_features)] #![feature(int_uint)]
-#![allow(unstable)]
+#![feature(unboxed_closures)]
+#![feature(core)]
+#![feature(test)]
+#![feature(rand)]
+#![feature(unicode)]
+#![feature(std_misc)]
+#![feature(libc)]
+#![feature(hash)]
+#![feature(debug_builders)]
+#![feature(unique)]
+#![feature(step_by)]
+#![feature(slice_patterns)]
+#![feature(float_from_str_radix)]
 
 extern crate core;
 extern crate test;
 extern crate libc;
-extern crate unicode;
+extern crate rustc_unicode;
+extern crate rand;
 
 mod any;
 mod atomic;
 mod cell;
 mod char;
 mod cmp;
-mod finally;
 mod fmt;
 mod hash;
 mod iter;

@@ -8,8 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![unstable = "the interaction between semaphores and the acquisition/release \
-               of resources is currently unclear"]
+#![unstable(feature = "std_misc",
+            reason = "the interaction between semaphores and the acquisition/release \
+                      of resources is currently unclear")]
 
 use ops::Drop;
 use sync::{Mutex, Condvar};
@@ -21,9 +22,10 @@ use sync::{Mutex, Condvar};
 /// until the counter is positive, and each release will increment the counter
 /// and unblock any threads if necessary.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```
+/// # #![feature(std_misc)]
 /// use std::sync::Semaphore;
 ///
 /// // Create a semaphore that represents 5 resources
@@ -42,7 +44,7 @@ use sync::{Mutex, Condvar};
 /// sem.release();
 /// ```
 pub struct Semaphore {
-    lock: Mutex<int>,
+    lock: Mutex<isize>,
     cvar: Condvar,
 }
 
@@ -58,7 +60,7 @@ impl Semaphore {
     /// The count specified can be thought of as a number of resources, and a
     /// call to `acquire` or `access` will block until at least one resource is
     /// available. It is valid to initialize a semaphore with a negative count.
-    pub fn new(count: int) -> Semaphore {
+    pub fn new(count: isize) -> Semaphore {
         Semaphore {
             lock: Mutex::new(count),
             cvar: Condvar::new(),
@@ -98,8 +100,7 @@ impl Semaphore {
     }
 }
 
-#[unsafe_destructor]
-#[stable]
+#[stable(feature = "rust1", since = "1.0.0")]
 impl<'a> Drop for SemaphoreGuard<'a> {
     fn drop(&mut self) {
         self.sem.release();
@@ -113,7 +114,7 @@ mod tests {
     use sync::Arc;
     use super::Semaphore;
     use sync::mpsc::channel;
-    use thread::Thread;
+    use thread;
 
     #[test]
     fn test_sem_acquire_release() {
@@ -133,7 +134,7 @@ mod tests {
     fn test_sem_as_mutex() {
         let s = Arc::new(Semaphore::new(1));
         let s2 = s.clone();
-        let _t = Thread::spawn(move|| {
+        let _t = thread::spawn(move|| {
             let _g = s2.access();
         });
         let _g = s.access();
@@ -145,7 +146,7 @@ mod tests {
         let (tx, rx) = channel();
         let s = Arc::new(Semaphore::new(0));
         let s2 = s.clone();
-        let _t = Thread::spawn(move|| {
+        let _t = thread::spawn(move|| {
             s2.acquire();
             tx.send(()).unwrap();
         });
@@ -156,7 +157,7 @@ mod tests {
         let (tx, rx) = channel();
         let s = Arc::new(Semaphore::new(0));
         let s2 = s.clone();
-        let _t = Thread::spawn(move|| {
+        let _t = thread::spawn(move|| {
             s2.release();
             let _ = rx.recv();
         });
@@ -172,7 +173,7 @@ mod tests {
         let s2 = s.clone();
         let (tx1, rx1) = channel();
         let (tx2, rx2) = channel();
-        let _t = Thread::spawn(move|| {
+        let _t = thread::spawn(move|| {
             let _g = s2.access();
             let _ = rx2.recv();
             tx1.send(()).unwrap();
@@ -189,7 +190,7 @@ mod tests {
         let (tx, rx) = channel();
         {
             let _g = s.access();
-            Thread::spawn(move|| {
+            thread::spawn(move|| {
                 tx.send(()).unwrap();
                 drop(s2.access());
                 tx.send(()).unwrap();

@@ -14,7 +14,7 @@ use ptr;
 use mem;
 use libc;
 use libc::types::os::arch::extra::{LPVOID, DWORD, LONG, BOOL};
-use sys_common::{stack, thread_info};
+use sys_common::stack;
 
 pub struct Handler {
     _data: *mut libc::c_void
@@ -30,16 +30,8 @@ impl Drop for Handler {
     fn drop(&mut self) {}
 }
 
-// get_task_info is called from an exception / signal handler.
-// It returns the guard page of the current task or 0 if that
-// guard page doesn't exist. None is returned if there's currently
-// no local task.
-unsafe fn get_task_guard_page() -> uint {
-    thread_info::stack_guard()
-}
-
 // This is initialized in init() and only read from after
-static mut PAGE_SIZE: uint = 0;
+static mut PAGE_SIZE: usize = 0;
 
 #[no_stack_check]
 extern "system" fn vectored_handler(ExceptionInfo: *mut EXCEPTION_POINTERS) -> LONG {
@@ -64,7 +56,7 @@ extern "system" fn vectored_handler(ExceptionInfo: *mut EXCEPTION_POINTERS) -> L
 pub unsafe fn init() {
     let mut info = mem::zeroed();
     libc::GetSystemInfo(&mut info);
-    PAGE_SIZE = info.dwPageSize as uint;
+    PAGE_SIZE = info.dwPageSize as usize;
 
     if AddVectoredExceptionHandler(0, vectored_handler) == ptr::null_mut() {
         panic!("failed to install exception handler");
@@ -81,7 +73,7 @@ pub unsafe fn make_handler() -> Handler {
         panic!("failed to reserve stack space for exception handling");
     }
 
-    Handler { _data: 0i as *mut libc::c_void }
+    Handler { _data: 0 as *mut libc::c_void }
 }
 
 pub struct EXCEPTION_RECORD {
@@ -104,7 +96,7 @@ pub type PVECTORED_EXCEPTION_HANDLER = extern "system"
 pub type ULONG = libc::c_ulong;
 
 const EXCEPTION_CONTINUE_SEARCH: LONG = 0;
-const EXCEPTION_MAXIMUM_PARAMETERS: uint = 15;
+const EXCEPTION_MAXIMUM_PARAMETERS: usize = 15;
 const EXCEPTION_STACK_OVERFLOW: DWORD = 0xc00000fd;
 
 extern "system" {

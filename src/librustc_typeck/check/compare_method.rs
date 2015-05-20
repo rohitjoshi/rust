@@ -8,6 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use middle::free_region::FreeRegionMap;
 use middle::infer;
 use middle::traits;
 use middle::ty::{self};
@@ -15,7 +16,7 @@ use middle::subst::{self, Subst, Substs, VecPerParamSpace};
 use util::ppaux::{self, Repr};
 
 use syntax::ast;
-use syntax::codemap::{Span};
+use syntax::codemap::Span;
 use syntax::parse::token;
 
 use super::assoc;
@@ -159,11 +160,11 @@ pub fn compare_impl_method<'tcx>(tcx: &ty::ctxt<'tcx>,
     // vs 'b).  However, the normal subtyping rules on fn types handle
     // this kind of equivalency just fine.
     //
-    // We now use these subsititions to ensure that all declared bounds are
+    // We now use these substitutions to ensure that all declared bounds are
     // satisfied by the implementation's method.
     //
     // We do this by creating a parameter environment which contains a
-    // substition corresponding to impl_to_skol_substs. We then build
+    // substitution corresponding to impl_to_skol_substs. We then build
     // trait_to_skol_substs and use it to convert the predicates contained
     // in the trait_m.generics to the skolemized form.
     //
@@ -205,7 +206,7 @@ pub fn compare_impl_method<'tcx>(tcx: &ty::ctxt<'tcx>,
     // however, because we want to replace all late-bound regions with
     // region variables.
     let impl_bounds =
-        impl_m.generics.to_bounds(tcx, impl_to_skol_substs);
+        impl_m.predicates.instantiate(tcx, impl_to_skol_substs);
 
     let (impl_bounds, _) =
         infcx.replace_late_bound_regions_with_fresh_var(
@@ -215,14 +216,8 @@ pub fn compare_impl_method<'tcx>(tcx: &ty::ctxt<'tcx>,
     debug!("compare_impl_method: impl_bounds={}",
            impl_bounds.repr(tcx));
 
-    // // Normalize the associated types in the impl_bounds.
-    // let traits::Normalized { value: impl_bounds, .. } =
-    //     traits::normalize(&mut selcx, normalize_cause.clone(), &impl_bounds);
-
     // Normalize the associated types in the trait_bounds.
-    let trait_bounds = trait_m.generics.to_bounds(tcx, &trait_to_skol_substs);
-    // let traits::Normalized { value: trait_bounds, .. } =
-    //     traits::normalize(&mut selcx, normalize_cause, &trait_bounds);
+    let trait_bounds = trait_m.predicates.instantiate(tcx, &trait_to_skol_substs);
 
     // Obtain the predicate split predicate sets for each.
     let trait_pred = trait_bounds.predicates.split();
@@ -242,20 +237,19 @@ pub fn compare_impl_method<'tcx>(tcx: &ty::ctxt<'tcx>,
     );
 
     // Construct trait parameter environment and then shift it into the skolemized viewpoint.
-    let mut trait_param_env = impl_param_env.clone();
     // The key step here is to update the caller_bounds's predicates to be
     // the new hybrid bounds we computed.
-    trait_param_env.caller_bounds.predicates = hybrid_preds;
+    let normalize_cause = traits::ObligationCause::misc(impl_m_span, impl_m_body_id);
+    let trait_param_env = impl_param_env.with_caller_bounds(hybrid_preds.into_vec());
+    let trait_param_env = traits::normalize_param_env_or_error(trait_param_env,
+                                                               normalize_cause.clone());
 
     debug!("compare_impl_method: trait_bounds={}",
         trait_param_env.caller_bounds.repr(tcx));
 
     let mut selcx = traits::SelectionContext::new(&infcx, &trait_param_env);
 
-    let normalize_cause =
-        traits::ObligationCause::misc(impl_m_span, impl_m_body_id);
-
-    for predicate in impl_pred.fns.into_iter() {
+    for predicate in impl_pred.fns {
         let traits::Normalized { value: predicate, .. } =
             traits::normalize(&mut selcx, normalize_cause.clone(), &predicate);
 
@@ -289,7 +283,7 @@ pub fn compare_impl_method<'tcx>(tcx: &ty::ctxt<'tcx>,
     let trait_fty = ty::mk_bare_fn(tcx, None, tcx.mk_bare_fn(trait_m.fty.clone()));
     let trait_fty = trait_fty.subst(tcx, &trait_to_skol_substs);
 
-    let err = infcx.try(|snapshot| {
+    let err = infcx.commit_if_ok(|snapshot| {
         let origin = infer::MethodCompatCheck(impl_m_span);
 
         let (impl_sig, _) =
@@ -361,9 +355,19 @@ pub fn compare_impl_method<'tcx>(tcx: &ty::ctxt<'tcx>,
         Ok(_) => {}
     }
 
-    // Finally, resolve all regions. This catches wily misuses of lifetime
-    // parameters.
-    infcx.resolve_regions_and_report_errors(impl_m_body_id);
+    // Finally, resolve all regions. This catches wily misuses of
+    // lifetime parameters. We have to build up a plausible lifetime
+    // environment based on what we find in the trait. We could also
+    // include the obligations derived from the method argument types,
+    // but I don't think it's necessary -- after all, those are still
+    // in effect when type-checking the body, and all the
+    // where-clauses in the header etc should be implied by the trait
+    // anyway, so it shouldn't be needed there either. Anyway, we can
+    // always add more relations later (it's backwards compat).
+    let mut free_regions = FreeRegionMap::new();
+    free_regions.relate_free_regions_from_predicates(tcx, &trait_param_env.caller_bounds);
+
+    infcx.resolve_regions_and_report_errors(&free_regions, impl_m_body_id);
 
     fn check_region_bounds_on_impl_method<'tcx>(tcx: &ty::ctxt<'tcx>,
                                                 span: Span,
@@ -406,5 +410,87 @@ pub fn compare_impl_method<'tcx>(tcx: &ty::ctxt<'tcx>,
         }
 
         return true;
+    }
+}
+
+pub fn compare_const_impl<'tcx>(tcx: &ty::ctxt<'tcx>,
+                                impl_c: &ty::AssociatedConst<'tcx>,
+                                impl_c_span: Span,
+                                trait_c: &ty::AssociatedConst<'tcx>,
+                                impl_trait_ref: &ty::TraitRef<'tcx>) {
+    debug!("compare_const_impl(impl_trait_ref={})",
+           impl_trait_ref.repr(tcx));
+
+    let infcx = infer::new_infer_ctxt(tcx);
+    let mut fulfillment_cx = traits::FulfillmentContext::new();
+
+    // The below is for the most part highly similar to the procedure
+    // for methods above. It is simpler in many respects, especially
+    // because we shouldn't really have to deal with lifetimes or
+    // predicates. In fact some of this should probably be put into
+    // shared functions because of DRY violations...
+    let trait_to_impl_substs = &impl_trait_ref.substs;
+
+    // Create a parameter environment that represents the implementation's
+    // method.
+    let impl_param_env =
+        ty::ParameterEnvironment::for_item(tcx, impl_c.def_id.node);
+
+    // Create mapping from impl to skolemized.
+    let impl_to_skol_substs = &impl_param_env.free_substs;
+
+    // Create mapping from trait to skolemized.
+    let trait_to_skol_substs =
+        trait_to_impl_substs
+        .subst(tcx, impl_to_skol_substs)
+        .with_method(impl_to_skol_substs.types.get_slice(subst::FnSpace).to_vec(),
+                     impl_to_skol_substs.regions().get_slice(subst::FnSpace).to_vec());
+    debug!("compare_const_impl: trait_to_skol_substs={}",
+           trait_to_skol_substs.repr(tcx));
+
+    // Compute skolemized form of impl and trait const tys.
+    let impl_ty = impl_c.ty.subst(tcx, impl_to_skol_substs);
+    let trait_ty = trait_c.ty.subst(tcx, &trait_to_skol_substs);
+
+    let err = infcx.commit_if_ok(|_| {
+        let origin = infer::Misc(impl_c_span);
+
+        // There is no "body" here, so just pass dummy id.
+        let impl_ty =
+            assoc::normalize_associated_types_in(&infcx,
+                                                 &impl_param_env,
+                                                 &mut fulfillment_cx,
+                                                 impl_c_span,
+                                                 0,
+                                                 &impl_ty);
+        debug!("compare_const_impl: impl_ty={}",
+               impl_ty.repr(tcx));
+
+        let trait_ty =
+            assoc::normalize_associated_types_in(&infcx,
+                                                 &impl_param_env,
+                                                 &mut fulfillment_cx,
+                                                 impl_c_span,
+                                                 0,
+                                                 &trait_ty);
+        debug!("compare_const_impl: trait_ty={}",
+               trait_ty.repr(tcx));
+
+        infer::mk_subty(&infcx, false, origin, impl_ty, trait_ty)
+    });
+
+    match err {
+        Ok(()) => { }
+        Err(terr) => {
+            debug!("checking associated const for compatibility: impl ty {}, trait ty {}",
+                   impl_ty.repr(tcx),
+                   trait_ty.repr(tcx));
+            span_err!(tcx.sess, impl_c_span, E0326,
+                      "implemented const `{}` has an incompatible type for \
+                      trait: {}",
+                      token::get_name(trait_c.name),
+                      ty::type_err_to_str(tcx, &terr));
+            return;
+        }
     }
 }

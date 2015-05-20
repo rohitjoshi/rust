@@ -11,7 +11,12 @@
 // Test that the compiler considers the 'static bound declared in the
 // trait. Issue #20890.
 
-trait Foo { type Value: 'static; }
+// pretty-expanded FIXME #23616
+
+trait Foo {
+    type Value: 'static;
+    fn dummy(&self) { }
+}
 
 fn require_static<T: 'static>() {}
 

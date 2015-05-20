@@ -11,13 +11,12 @@
 
 // Test that the `Fn` traits require `()` form without a feature gate.
 
-fn bar1(x: &Fn<(),()>) {
+fn bar1(x: &Fn<(), Output=()>) {
     //~^ ERROR angle-bracket notation is not stable when used with the `Fn` family
 }
 
-fn bar2<T>(x: &T) where T: Fn<(),()> {
+fn bar2<T>(x: &T) where T: Fn<()> {
     //~^ ERROR angle-bracket notation is not stable when used with the `Fn` family
 }
 
 fn main() { }
-

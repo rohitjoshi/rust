@@ -12,7 +12,8 @@
 
 fn main() {
     fn bar(n: isize) {
+        // FIXME (#24414): This error message needs improvement.
         let _x: [isize; n];
-        //~^ ERROR expected constant expr for array length: non-constant path in constant expr
+        //~^ ERROR no type for local variable
     }
 }

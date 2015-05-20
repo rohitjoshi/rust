@@ -10,9 +10,8 @@
 
 #![feature(box_syntax)]
 
+#[derive(Copy, Clone)]
 struct A { a: isize, b: isize }
-
-impl Copy for A {}
 
 struct B { a: isize, b: Box<isize> }
 
@@ -95,4 +94,3 @@ fn main() {
     field_deref_after_var_borrow();
     field_deref_after_field_borrow();
 }
-

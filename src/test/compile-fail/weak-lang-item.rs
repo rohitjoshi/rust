@@ -13,7 +13,8 @@
 // error-pattern: language item required, but not found: `stack_exhausted`
 // error-pattern: language item required, but not found: `eh_personality`
 
+#![feature(no_std)]
 #![no_std]
 
 extern crate core;
-extern crate "weak-lang-items" as other;
+extern crate weak_lang_items;

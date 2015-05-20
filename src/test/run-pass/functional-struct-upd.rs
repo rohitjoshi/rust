@@ -8,10 +8,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#[derive(Show)]
+#[derive(Debug)]
 struct Foo {
-    x: int,
-    y: int
+    x: isize,
+    y: isize
 }
 
 pub fn main() {

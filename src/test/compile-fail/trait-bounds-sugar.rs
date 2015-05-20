@@ -10,7 +10,6 @@
 
 // Tests for "default" bounds inferred for traits with no bounds list.
 
-
 trait Foo {}
 
 fn a(_x: Box<Foo+Send>) {
@@ -24,8 +23,7 @@ fn c(x: Box<Foo+Sync>) {
 }
 
 fn d(x: &'static (Foo+Sync)) {
-    b(x); //~ ERROR cannot infer
-    //~^ ERROR mismatched types
+    b(x);
 }
 
 fn main() {}

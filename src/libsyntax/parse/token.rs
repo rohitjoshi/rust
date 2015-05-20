@@ -23,13 +23,11 @@ use util::interner;
 
 use serialize::{Decodable, Decoder, Encodable, Encoder};
 use std::fmt;
-use std::mem;
 use std::ops::Deref;
-use std::path::BytesContainer;
 use std::rc::Rc;
 
 #[allow(non_camel_case_types)]
-#[derive(Clone, RustcEncodable, RustcDecodable, PartialEq, Eq, Hash, Show, Copy)]
+#[derive(Clone, RustcEncodable, RustcDecodable, PartialEq, Eq, Hash, Debug, Copy)]
 pub enum BinOpToken {
     Plus,
     Minus,
@@ -44,7 +42,7 @@ pub enum BinOpToken {
 }
 
 /// A delimiter token
-#[derive(Clone, RustcEncodable, RustcDecodable, PartialEq, Eq, Hash, Show, Copy)]
+#[derive(Clone, RustcEncodable, RustcDecodable, PartialEq, Eq, Hash, Debug, Copy)]
 pub enum DelimToken {
     /// A round parenthesis: `(` or `)`
     Paren,
@@ -54,14 +52,14 @@ pub enum DelimToken {
     Brace,
 }
 
-#[derive(Clone, RustcEncodable, RustcDecodable, PartialEq, Eq, Hash, Show, Copy)]
+#[derive(Clone, RustcEncodable, RustcDecodable, PartialEq, Eq, Hash, Debug, Copy)]
 pub enum IdentStyle {
     /// `::` follows the identifier with no whitespace in-between.
     ModName,
     Plain,
 }
 
-#[derive(Clone, RustcEncodable, RustcDecodable, PartialEq, Eq, Hash, Show, Copy)]
+#[derive(Clone, RustcEncodable, RustcDecodable, PartialEq, Eq, Hash, Debug, Copy)]
 pub enum SpecialMacroVar {
     /// `$crate` will be filled in with the name of the crate a macro was
     /// imported from, if any.
@@ -76,7 +74,7 @@ impl SpecialMacroVar {
     }
 }
 
-#[derive(Clone, RustcEncodable, RustcDecodable, PartialEq, Eq, Hash, Show, Copy)]
+#[derive(Clone, RustcEncodable, RustcDecodable, PartialEq, Eq, Hash, Debug, Copy)]
 pub enum Lit {
     Byte(ast::Name),
     Char(ast::Name),
@@ -102,7 +100,7 @@ impl Lit {
 }
 
 #[allow(non_camel_case_types)]
-#[derive(Clone, RustcEncodable, RustcDecodable, PartialEq, Eq, Hash, Show)]
+#[derive(Clone, RustcEncodable, RustcDecodable, PartialEq, Eq, Hash, Debug)]
 pub enum Token {
     /* Expression-operator symbols. */
     Eq,
@@ -175,6 +173,14 @@ pub enum Token {
 }
 
 impl Token {
+    /// Returns `true` if the token starts with '>'.
+    pub fn is_like_gt(&self) -> bool {
+        match *self {
+            BinOp(Shr) | BinOpEq(Shr) | Gt | Ge => true,
+            _ => false,
+        }
+    }
+
     /// Returns `true` if the token can appear at the start of an expression.
     pub fn can_begin_expr(&self) -> bool {
         match *self {
@@ -300,6 +306,7 @@ impl Token {
                    n == SELF_KEYWORD_NAME
                 || n == STATIC_KEYWORD_NAME
                 || n == SUPER_KEYWORD_NAME
+                || n == SELF_TYPE_KEYWORD_NAME
                 || STRICT_KEYWORD_START <= n
                 && n <= RESERVED_KEYWORD_FINAL
             },
@@ -317,6 +324,7 @@ impl Token {
                    n == SELF_KEYWORD_NAME
                 || n == STATIC_KEYWORD_NAME
                 || n == SUPER_KEYWORD_NAME
+                || n == SELF_TYPE_KEYWORD_NAME
                 || STRICT_KEYWORD_START <= n
                 && n <= STRICT_KEYWORD_FINAL
             },
@@ -373,6 +381,12 @@ pub enum Nonterminal {
     NtMeta(P<ast::MetaItem>),
     NtPath(Box<ast::Path>),
     NtTT(P<ast::TokenTree>), // needs P'ed to break a circularity
+    // These is not exposed to macros, but is used by quasiquote.
+    NtArm(ast::Arm),
+    NtImplItem(P<ast::ImplItem>),
+    NtTraitItem(P<ast::TraitItem>),
+    NtGenerics(ast::Generics),
+    NtWhereClause(ast::WhereClause),
 }
 
 impl fmt::Debug for Nonterminal {
@@ -388,6 +402,11 @@ impl fmt::Debug for Nonterminal {
             NtMeta(..) => f.pad("NtMeta(..)"),
             NtPath(..) => f.pad("NtPath(..)"),
             NtTT(..) => f.pad("NtTT(..)"),
+            NtArm(..) => f.pad("NtArm(..)"),
+            NtImplItem(..) => f.pad("NtImplItem(..)"),
+            NtTraitItem(..) => f.pad("NtTraitItem(..)"),
+            NtGenerics(..) => f.pad("NtGenerics(..)"),
+            NtWhereClause(..) => f.pad("NtWhereClause(..)"),
         }
     }
 }
@@ -423,10 +442,10 @@ macro_rules! declare_special_idents_and_keywords {(
         $( ($rk_name:expr, $rk_variant:ident, $rk_str:expr); )*
     }
 ) => {
-    static STRICT_KEYWORD_START: ast::Name = first!($( ast::Name($sk_name), )*);
-    static STRICT_KEYWORD_FINAL: ast::Name = last!($( ast::Name($sk_name), )*);
-    static RESERVED_KEYWORD_START: ast::Name = first!($( ast::Name($rk_name), )*);
-    static RESERVED_KEYWORD_FINAL: ast::Name = last!($( ast::Name($rk_name), )*);
+    const STRICT_KEYWORD_START: ast::Name = first!($( ast::Name($sk_name), )*);
+    const STRICT_KEYWORD_FINAL: ast::Name = last!($( ast::Name($sk_name), )*);
+    const RESERVED_KEYWORD_START: ast::Name = first!($( ast::Name($rk_name), )*);
+    const RESERVED_KEYWORD_FINAL: ast::Name = last!($( ast::Name($rk_name), )*);
 
     pub mod special_idents {
         use ast;
@@ -456,7 +475,7 @@ macro_rules! declare_special_idents_and_keywords {(
         pub use self::Keyword::*;
         use ast;
 
-        #[derive(Copy)]
+        #[derive(Copy, Clone, PartialEq, Eq)]
         pub enum Keyword {
             $( $sk_variant, )*
             $( $rk_variant, )*
@@ -480,7 +499,7 @@ macro_rules! declare_special_idents_and_keywords {(
         $(init_vec.push($si_str);)*
         $(init_vec.push($sk_str);)*
         $(init_vec.push($rk_str);)*
-        interner::StrInterner::prefill(&init_vec[])
+        interner::StrInterner::prefill(&init_vec[..])
     }
 }}
 
@@ -488,10 +507,12 @@ macro_rules! declare_special_idents_and_keywords {(
 pub const SELF_KEYWORD_NAME: ast::Name = ast::Name(SELF_KEYWORD_NAME_NUM);
 const STATIC_KEYWORD_NAME: ast::Name = ast::Name(STATIC_KEYWORD_NAME_NUM);
 const SUPER_KEYWORD_NAME: ast::Name = ast::Name(SUPER_KEYWORD_NAME_NUM);
+const SELF_TYPE_KEYWORD_NAME: ast::Name = ast::Name(SELF_TYPE_KEYWORD_NAME_NUM);
 
 pub const SELF_KEYWORD_NAME_NUM: u32 = 1;
 const STATIC_KEYWORD_NAME_NUM: u32 = 2;
 const SUPER_KEYWORD_NAME_NUM: u32 = 3;
+const SELF_TYPE_KEYWORD_NAME_NUM: u32 = 10;
 
 // NB: leaving holes in the ident table is bad! a different ident will get
 // interned with the id from the hole, but it will be between the min and max
@@ -514,68 +535,68 @@ declare_special_idents_and_keywords! {
         (7,                          clownshoe_abi,          "__rust_abi");
         (8,                          opaque,                 "<opaque>");
         (9,                          unnamed_field,          "<unnamed_field>");
-        (10,                         type_self,              "Self");
+        (super::SELF_TYPE_KEYWORD_NAME_NUM, type_self,       "Self");
         (11,                         prelude_import,         "prelude_import");
-        (12,                         FullRange,              "FullRange");
     }
 
     pub mod keywords {
         // These ones are variants of the Keyword enum
 
         'strict:
-        (13,                         As,         "as");
-        (14,                         Break,      "break");
-        (15,                         Crate,      "crate");
-        (16,                         Else,       "else");
-        (17,                         Enum,       "enum");
-        (18,                         Extern,     "extern");
-        (19,                         False,      "false");
-        (20,                         Fn,         "fn");
-        (21,                         For,        "for");
-        (22,                         If,         "if");
-        (23,                         Impl,       "impl");
-        (24,                         In,         "in");
-        (25,                         Let,        "let");
-        (26,                         Loop,       "loop");
-        (27,                         Match,      "match");
-        (28,                         Mod,        "mod");
-        (29,                         Move,       "move");
-        (30,                         Mut,        "mut");
-        (31,                         Pub,        "pub");
-        (32,                         Ref,        "ref");
-        (33,                         Return,     "return");
+        (12,                         As,         "as");
+        (13,                         Break,      "break");
+        (14,                         Crate,      "crate");
+        (15,                         Else,       "else");
+        (16,                         Enum,       "enum");
+        (17,                         Extern,     "extern");
+        (18,                         False,      "false");
+        (19,                         Fn,         "fn");
+        (20,                         For,        "for");
+        (21,                         If,         "if");
+        (22,                         Impl,       "impl");
+        (23,                         In,         "in");
+        (24,                         Let,        "let");
+        (25,                         Loop,       "loop");
+        (26,                         Match,      "match");
+        (27,                         Mod,        "mod");
+        (28,                         Move,       "move");
+        (29,                         Mut,        "mut");
+        (30,                         Pub,        "pub");
+        (31,                         Ref,        "ref");
+        (32,                         Return,     "return");
         // Static and Self are also special idents (prefill de-dupes)
         (super::STATIC_KEYWORD_NAME_NUM, Static, "static");
-        (super::SELF_KEYWORD_NAME_NUM,   Self,   "self");
-        (34,                         Struct,     "struct");
+        (super::SELF_KEYWORD_NAME_NUM, SelfValue, "self");
+        (super::SELF_TYPE_KEYWORD_NAME_NUM, SelfType, "Self");
+        (33,                         Struct,     "struct");
         (super::SUPER_KEYWORD_NAME_NUM, Super,   "super");
-        (35,                         True,       "true");
-        (36,                         Trait,      "trait");
-        (37,                         Type,       "type");
-        (38,                         Unsafe,     "unsafe");
-        (39,                         Use,        "use");
-        (40,                         Virtual,    "virtual");
-        (41,                         While,      "while");
-        (42,                         Continue,   "continue");
-        (43,                         Proc,       "proc");
-        (44,                         Box,        "box");
-        (45,                         Const,      "const");
-        (46,                         Where,      "where");
+        (34,                         True,       "true");
+        (35,                         Trait,      "trait");
+        (36,                         Type,       "type");
+        (37,                         Unsafe,     "unsafe");
+        (38,                         Use,        "use");
+        (39,                         Virtual,    "virtual");
+        (40,                         While,      "while");
+        (41,                         Continue,   "continue");
+        (42,                         Box,        "box");
+        (43,                         Const,      "const");
+        (44,                         Where,      "where");
         'reserved:
-        (47,                         Alignof,    "alignof");
-        (48,                         Be,         "be");
-        (49,                         Offsetof,   "offsetof");
-        (50,                         Priv,       "priv");
-        (51,                         Pure,       "pure");
-        (52,                         Sizeof,     "sizeof");
-        (53,                         Typeof,     "typeof");
-        (54,                         Unsized,    "unsized");
-        (55,                         Yield,      "yield");
-        (56,                         Do,         "do");
-        (57,                         Abstract,   "abstract");
-        (58,                         Final,      "final");
-        (59,                         Override,   "override");
-        (60,                         Macro,      "macro");
+        (45,                         Proc,       "proc");
+        (46,                         Alignof,    "alignof");
+        (47,                         Become,     "become");
+        (48,                         Offsetof,   "offsetof");
+        (49,                         Priv,       "priv");
+        (50,                         Pure,       "pure");
+        (51,                         Sizeof,     "sizeof");
+        (52,                         Typeof,     "typeof");
+        (53,                         Unsized,    "unsized");
+        (54,                         Yield,      "yield");
+        (55,                         Do,         "do");
+        (56,                         Abstract,   "abstract");
+        (57,                         Final,      "final");
+        (58,                         Override,   "override");
+        (59,                         Macro,      "macro");
     }
 }
 
@@ -584,7 +605,7 @@ pub type IdentInterner = StrInterner;
 
 // if an interner exists in TLS, return it. Otherwise, prepare a
 // fresh one.
-// FIXME(eddyb) #8726 This should probably use a task-local reference.
+// FIXME(eddyb) #8726 This should probably use a thread-local reference.
 pub fn get_ident_interner() -> Rc<IdentInterner> {
     thread_local!(static KEY: Rc<::parse::token::IdentInterner> = {
         Rc::new(mk_fresh_ident_interner())
@@ -598,14 +619,14 @@ pub fn reset_ident_interner() {
     interner.reset(mk_fresh_ident_interner());
 }
 
-/// Represents a string stored in the task-local interner. Because the
-/// interner lives for the life of the task, this can be safely treated as an
-/// immortal string, as long as it never crosses between tasks.
+/// Represents a string stored in the thread-local interner. Because the
+/// interner lives for the life of the thread, this can be safely treated as an
+/// immortal string, as long as it never crosses between threads.
 ///
 /// FIXME(pcwalton): You must be careful about what you do in the destructors
 /// of objects stored in TLS, because they may run after the interner is
 /// destroyed. In particular, they must not access string contents. This can
-/// be fixed in the future by just leaking all strings until task death
+/// be fixed in the future by just leaking all strings until thread death
 /// somehow.
 #[derive(Clone, PartialEq, Hash, PartialOrd, Eq, Ord)]
 pub struct InternedString {
@@ -626,11 +647,6 @@ impl InternedString {
             string: string,
         }
     }
-
-    #[inline]
-    pub fn get<'a>(&'a self) -> &'a str {
-        &self.string[]
-    }
 }
 
 impl Deref for InternedString {
@@ -639,72 +655,60 @@ impl Deref for InternedString {
     fn deref(&self) -> &str { &*self.string }
 }
 
-impl BytesContainer for InternedString {
-    fn container_as_bytes<'a>(&'a self) -> &'a [u8] {
-        // FIXME #12938: This is a workaround for the incorrect signature
-        // of `BytesContainer`, which is itself a workaround for the lack of
-        // DST.
-        unsafe {
-            let this = self.get();
-            mem::transmute::<&[u8],&[u8]>(this.container_as_bytes())
-        }
-    }
-}
-
 impl fmt::Debug for InternedString {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt::Debug::fmt(&self.string[], f)
+        fmt::Debug::fmt(&self.string, f)
     }
 }
 
 impl fmt::Display for InternedString {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt::Display::fmt(&self.string[], f)
+        fmt::Display::fmt(&self.string, f)
     }
 }
 
 impl<'a> PartialEq<&'a str> for InternedString {
     #[inline(always)]
     fn eq(&self, other: & &'a str) -> bool {
-        PartialEq::eq(&self.string[], *other)
+        PartialEq::eq(&self.string[..], *other)
     }
     #[inline(always)]
     fn ne(&self, other: & &'a str) -> bool {
-        PartialEq::ne(&self.string[], *other)
+        PartialEq::ne(&self.string[..], *other)
     }
 }
 
 impl<'a> PartialEq<InternedString > for &'a str {
     #[inline(always)]
     fn eq(&self, other: &InternedString) -> bool {
-        PartialEq::eq(*self, &other.string[])
+        PartialEq::eq(*self, &other.string[..])
     }
     #[inline(always)]
     fn ne(&self, other: &InternedString) -> bool {
-        PartialEq::ne(*self, &other.string[])
+        PartialEq::ne(*self, &other.string[..])
     }
 }
 
 impl Decodable for InternedString {
     fn decode<D: Decoder>(d: &mut D) -> Result<InternedString, D::Error> {
-        Ok(get_name(get_ident_interner().intern(&try!(d.read_str())[])))
+        Ok(get_name(get_ident_interner().intern(&try!(d.read_str())[..])))
     }
 }
 
 impl Encodable for InternedString {
     fn encode<S: Encoder>(&self, s: &mut S) -> Result<(), S::Error> {
-        s.emit_str(&self.string[])
+        s.emit_str(&self.string)
     }
 }
 
-/// Returns the string contents of a name, using the task-local interner.
+/// Returns the string contents of a name, using the thread-local interner.
 #[inline]
 pub fn get_name(name: ast::Name) -> InternedString {
     let interner = get_ident_interner();
     InternedString::new_from_rc_str(interner.get(name))
 }
 
-/// Returns the string contents of an identifier, using the task-local
+/// Returns the string contents of an identifier, using the thread-local
 /// interner.
 #[inline]
 pub fn get_ident(ident: ast::Ident) -> InternedString {
@@ -712,7 +716,7 @@ pub fn get_ident(ident: ast::Ident) -> InternedString {
 }
 
 /// Interns and returns the string contents of an identifier, using the
-/// task-local interner.
+/// thread-local interner.
 #[inline]
 pub fn intern_and_get_ident(s: &str) -> InternedString {
     get_name(intern(s))
@@ -761,7 +765,7 @@ pub fn fresh_mark() -> ast::Mrk {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use ast;
     use ext::mtwt;

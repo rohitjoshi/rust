@@ -10,11 +10,12 @@
 
 #![feature(box_syntax)]
 
-struct Test<'s> {
+struct Test {
     func: Box<FnMut()+'static>
 }
 
 fn main() {
-    let closure: Box<Fn()+'static> = box || ();
+    // FIXME (#22405): Replace `Box::new` with `box` here when/if possible.
+    let closure: Box<Fn()+'static> = Box::new(|| ());
     let test = box Test { func: closure }; //~ ERROR mismatched types
 }

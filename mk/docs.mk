@@ -25,9 +25,9 @@
 # L10N_LANGS are the languages for which the docs have been
 # translated.
 ######################################################################
-DOCS := index intro tutorial complement-bugreport \
+DOCS := index intro tutorial \
     complement-lang-faq complement-design-faq complement-project-faq \
-    rustdoc reference
+    rustdoc reference grammar
 
 # Legacy guides, preserved for a while to reduce the number of 404s
 DOCS += guide-crates guide-error-handling guide-ffi guide-macros guide \
@@ -71,9 +71,13 @@ RUSTBOOK_EXE = $(HBIN2_H_$(CFG_BUILD))/rustbook$(X_$(CFG_BUILD))
 # ./configure
 RUSTBOOK = $(RPATH_VAR2_T_$(CFG_BUILD)_H_$(CFG_BUILD)) $(RUSTBOOK_EXE)
 
+# The error-index-generator executable...
+ERR_IDX_GEN_EXE = $(HBIN2_H_$(CFG_BUILD))/error-index-generator$(X_$(CFG_BUILD))
+ERR_IDX_GEN = $(RPATH_VAR2_T_$(CFG_BUILD)_H_$(CFG_BUILD)) $(ERR_IDX_GEN_EXE)
+
 D := $(S)src/doc
 
-DOC_TARGETS := trpl
+DOC_TARGETS := trpl style error-index
 COMPILER_DOC_TARGETS :=
 DOC_L10N_TARGETS :=
 
@@ -85,26 +89,15 @@ else
 HTML_DEPS :=
 endif
 
-# Check for the various external utilities for the EPUB/PDF docs:
+# Check for xelatex
 
-ifeq ($(CFG_LUALATEX),)
-  $(info cfg: no lualatex found, deferring to xelatex)
-  ifeq ($(CFG_XELATEX),)
-    $(info cfg: no xelatex found, deferring to pdflatex)
-    ifeq ($(CFG_PDFLATEX),)
-      $(info cfg: no pdflatex found, disabling LaTeX docs)
-      NO_PDF_DOCS = 1
-	else
-      CFG_LATEX := $(CFG_PDFLATEX)
-    endif
-  else
+ifneq ($(CFG_XELATEX),)
     CFG_LATEX := $(CFG_XELATEX)
     XELATEX = 1
-  endif
-else
-  CFG_LATEX := $(CFG_LUALATEX)
+  else
+    $(info cfg: no xelatex found, disabling LaTeX docs)
+    NO_PDF_DOCS = 1
 endif
-
 
 ifeq ($(CFG_PANDOC),)
 $(info cfg: no pandoc found, omitting PDF and EPUB docs)
@@ -140,21 +133,21 @@ doc/:
 HTML_DEPS += doc/rust.css
 doc/rust.css: $(D)/rust.css | doc/
 	@$(call E, cp: $@)
-	$(Q)cp -a $< $@ 2> /dev/null
+	$(Q)cp -PRp $< $@ 2> /dev/null
 
 HTML_DEPS += doc/favicon.inc
 doc/favicon.inc: $(D)/favicon.inc | doc/
 	@$(call E, cp: $@)
-	$(Q)cp -a $< $@ 2> /dev/null
+	$(Q)cp -PRp $< $@ 2> /dev/null
 
 doc/full-toc.inc: $(D)/full-toc.inc | doc/
 	@$(call E, cp: $@)
-	$(Q)cp -a $< $@ 2> /dev/null
+	$(Q)cp -PRp $< $@ 2> /dev/null
 
 HTML_DEPS += doc/footer.inc
 doc/footer.inc: $(D)/footer.inc | doc/
 	@$(call E, cp: $@)
-	$(Q)cp -a $< $@ 2> /dev/null
+	$(Q)cp -PRp $< $@ 2> /dev/null
 
 # The (english) documentation for each doc item.
 
@@ -261,16 +254,21 @@ endif
 doc/$(1)/:
 	$$(Q)mkdir -p $$@
 
-$(2) += doc/$(1)/index.html
 doc/$(1)/index.html: CFG_COMPILER_HOST_TRIPLE = $(CFG_TARGET)
 doc/$(1)/index.html: $$(LIB_DOC_DEP_$(1)) doc/$(1)/
 	@$$(call E, rustdoc: $$@)
 	$$(Q)CFG_LLVM_LINKAGE_FILE=$$(LLVM_LINKAGE_PATH_$(CFG_BUILD)) \
-		$$(RUSTDOC) --cfg dox --cfg stage2 $$<
+		$$(RUSTDOC) --cfg dox --cfg stage2 $$(RUSTFLAGS_$(1)) $$<
 endef
 
-$(foreach crate,$(DOC_CRATES),$(eval $(call DEF_LIB_DOC,$(crate),DOC_TARGETS)))
-$(foreach crate,$(COMPILER_DOC_CRATES),$(eval $(call DEF_LIB_DOC,$(crate),COMPILER_DOC_TARGETS)))
+$(foreach crate,$(CRATES),$(eval $(call DEF_LIB_DOC,$(crate))))
+
+COMPILER_DOC_TARGETS := $(CRATES:%=doc/%/index.html)
+ifdef CFG_COMPILER_DOCS
+  DOC_TARGETS += $(COMPILER_DOC_TARGETS)
+else
+  DOC_TARGETS += $(DOC_CRATES:%=doc/%/index.html)
+endif
 
 ifdef CFG_DISABLE_DOCS
   $(info cfg: disabling doc build (CFG_DISABLE_DOCS))
@@ -284,5 +282,19 @@ compiler-docs: $(COMPILER_DOC_TARGETS)
 trpl: doc/book/index.html
 
 doc/book/index.html: $(RUSTBOOK_EXE) $(wildcard $(S)/src/doc/trpl/*.md) | doc/
+	@$(call E, rustbook: $@)
 	$(Q)rm -rf doc/book
 	$(Q)$(RUSTBOOK) build $(S)src/doc/trpl doc/book
+
+style: doc/style/index.html
+
+doc/style/index.html: $(RUSTBOOK_EXE) $(wildcard $(S)/src/doc/style/*.md) | doc/
+	@$(call E, rustbook: $@)
+	$(Q)rm -rf doc/style
+	$(Q)$(RUSTBOOK) build $(S)src/doc/style doc/style
+
+error-index: doc/error-index.html
+
+doc/error-index.html: $(ERR_IDX_GEN_EXE) | doc/
+	$(Q)$(call E, error-index-generator: $@)
+	$(Q)$(ERR_IDX_GEN)

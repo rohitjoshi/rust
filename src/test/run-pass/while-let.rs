@@ -8,19 +8,22 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+
+#![feature(collections)]
+
 use std::collections::BinaryHeap;
 
-fn make_pq() -> BinaryHeap<int> {
-    BinaryHeap::from_vec(vec![1i,2,3])
+fn make_pq() -> BinaryHeap<isize> {
+    BinaryHeap::from_vec(vec![1,2,3])
 }
 
 pub fn main() {
     let mut pq = make_pq();
-    let mut sum = 0i;
+    let mut sum = 0;
     while let Some(x) = pq.pop() {
         sum += x;
     }
-    assert_eq!(sum, 6i);
+    assert_eq!(sum, 6);
 
     pq = make_pq();
     sum = 0;
@@ -30,7 +33,7 @@ pub fn main() {
             break 'a;
         }
     }
-    assert_eq!(sum, 5i);
+    assert_eq!(sum, 5);
 
     pq = make_pq();
     sum = 0;
@@ -40,7 +43,7 @@ pub fn main() {
         }
         sum += x;
     }
-    assert_eq!(sum, 3i);
+    assert_eq!(sum, 3);
 
     let mut pq1 = make_pq();
     sum = 0;
@@ -50,5 +53,5 @@ pub fn main() {
             sum += x * y;
         }
     }
-    assert_eq!(sum, 6i + 12 + 18);
+    assert_eq!(sum, 6 + 12 + 18);
 }

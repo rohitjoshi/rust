@@ -35,7 +35,7 @@ fn test_rbml<'a, 'b, A:
     let mut rbml_w = EBwriter::Encoder::new(&mut wr);
     a1.encode(&mut rbml_w);
 
-    let d: serialize::rbml::Doc<'a> = EBDoc::new(&wr[]);
+    let d: serialize::rbml::Doc<'a> = EBDoc::new(&wr);
     let mut decoder: EBReader::Decoder<'a> = EBreader::Decoder::new(d);
     let a2: A = Decodable::decode(&mut decoder);
     assert!(*a1 == a2);
@@ -43,7 +43,7 @@ fn test_rbml<'a, 'b, A:
 
 #[derive(Decodable, Encodable)]
 enum Expr {
-    Val(uint),
+    Val(usize),
     Plus(@Expr, @Expr),
     Minus(@Expr, @Expr)
 }
@@ -103,23 +103,23 @@ impl<T:cmp::Eq> cmp::Eq for Quark<T> {
 
 impl cmp::Eq for CLike {
     fn eq(&self, other: &CLike) -> bool {
-        (*self) as int == *other as int
+        (*self) as isize == *other as isize
     }
     fn ne(&self, other: &CLike) -> bool { !self.eq(other) }
 }
 
 #[derive(Decodable, Encodable, Eq)]
 struct Spanned<T> {
-    lo: uint,
-    hi: uint,
+    lo: usize,
+    hi: usize,
     node: T,
 }
 
 #[derive(Decodable, Encodable)]
-struct SomeStruct { v: Vec<uint> }
+struct SomeStruct { v: Vec<usize> }
 
 #[derive(Decodable, Encodable)]
-struct Point {x: uint, y: uint}
+struct Point {x: usize, y: usize}
 
 #[derive(Decodable, Encodable)]
 enum Quark<T> {
@@ -131,19 +131,19 @@ enum Quark<T> {
 enum CLike { A, B, C }
 
 pub fn main() {
-    let a = &Plus(@Minus(@Val(3u), @Val(10u)), @Plus(@Val(22u), @Val(5u)));
+    let a = &Plus(@Minus(@Val(3), @Val(10)), @Plus(@Val(22), @Val(5)));
     test_rbml(a);
 
-    let a = &Spanned {lo: 0u, hi: 5u, node: 22u};
+    let a = &Spanned {lo: 0, hi: 5, node: 22};
     test_rbml(a);
 
-    let a = &Point {x: 3u, y: 5u};
+    let a = &Point {x: 3, y: 5};
     test_rbml(a);
 
-    let a = &Top(22u);
+    let a = &Top(22);
     test_rbml(a);
 
-    let a = &Bottom(222u);
+    let a = &Bottom(222);
     test_rbml(a);
 
     let a = &A;

@@ -8,29 +8,25 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// ignore-android: FIXME(#9116) Bus error
-
 use std::mem;
 
 #[repr(packed)]
-#[derive(PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 struct Foo {
     bar: u8,
     baz: u64
 }
-
-impl Copy for Foo {}
 
 pub fn main() {
     let foos = [Foo { bar: 1, baz: 2 }; 10];
 
     assert_eq!(mem::size_of::<[Foo; 10]>(), 90);
 
-    for i in range(0u, 10) {
+    for i in 0..10 {
         assert_eq!(foos[i], Foo { bar: 1, baz: 2});
     }
 
-    for &foo in foos.iter() {
+    for &foo in &foos {
         assert_eq!(foo, Foo { bar: 1, baz: 2 });
     }
 }

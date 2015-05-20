@@ -9,7 +9,6 @@
 // except according to those terms.
 
 // ignore-tidy-linelength
-// ignore-android: FIXME(#10381)
 // min-lldb-version: 310
 
 // compile-flags:-g
@@ -69,7 +68,7 @@ enum Univariant {
 
 fn main() {
 
-    // In order to avoid endianess trouble all of the following test values consist of a single
+    // In order to avoid endianness trouble all of the following test values consist of a single
     // repeated byte. This way each interpretation of the union should look the same, no matter if
     // this is a big or little endian machine.
 

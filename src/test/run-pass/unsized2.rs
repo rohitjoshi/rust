@@ -7,13 +7,13 @@
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-//
-// ignore-lexer-test FIXME #15879
 
 #![allow(unknown_features)]
 #![feature(box_syntax)]
 
 // Test sized-ness checking in substitution.
+
+use std::marker;
 
 // Unbounded.
 fn f1<X: ?Sized>(x: &X) {
@@ -25,7 +25,7 @@ fn f2<X>(x: &X) {
 }
 
 // Bounded.
-trait T {}
+trait T { fn dummy(&self) { } }
 fn f3<X: T+?Sized>(x: &X) {
     f3::<X>(x);
 }
@@ -66,20 +66,24 @@ fn f7<X: ?Sized+T3>(x: &X) {
 }
 
 trait T4<X> {
-    fn m1(x: &T4<X>);
-    fn m2(x: &T5<X>);
+    fn dummy(&self) { }
+    fn m1(x: &T4<X>, y: X);
+    fn m2(x: &T5<X>, y: X);
 }
 trait T5<X: ?Sized> {
+    fn dummy(&self) { }
     // not an error (for now)
     fn m1(x: &T4<X>);
     fn m2(x: &T5<X>);
 }
 
 trait T6<X: T> {
+    fn dummy(&self) { }
     fn m1(x: &T4<X>);
     fn m2(x: &T5<X>);
 }
 trait T7<X: ?Sized+T> {
+    fn dummy(&self) { }
     // not an error (for now)
     fn m1(x: &T4<X>);
     fn m2(x: &T5<X>);
@@ -90,14 +94,14 @@ struct S2<X: ?Sized> {
     f: X,
 }
 struct S3<X: ?Sized> {
-    f1: int,
+    f1: isize,
     f2: X,
 }
 enum E<X: ?Sized> {
     V1(X),
     V2{x: X},
-    V3(int, X),
-    V4{u: int, x: X},
+    V3(isize, X),
+    V4{u: isize, x: X},
 }
 
 pub fn main() {

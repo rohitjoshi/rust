@@ -12,7 +12,7 @@ use attr::AttrMetaMethods;
 use diagnostic::SpanHandler;
 use fold::Folder;
 use {ast, fold, attr};
-use codemap::Spanned;
+use codemap::{Spanned, respan};
 use ptr::P;
 
 use util::small_vector::SmallVector;
@@ -26,8 +26,9 @@ struct Context<F> where F: FnMut(&[ast::Attribute]) -> bool {
 // Support conditional compilation by transforming the AST, stripping out
 // any items that do not belong in the current configuration
 pub fn strip_unconfigured_items(diagnostic: &SpanHandler, krate: ast::Crate) -> ast::Crate {
+    let krate = process_cfg_attr(diagnostic, krate);
     let config = krate.config.clone();
-    strip_items(krate, |attrs| in_cfg(diagnostic, config.as_slice(), attrs))
+    strip_items(krate, |attrs| in_cfg(diagnostic, &config, attrs))
 }
 
 impl<F> fold::Folder for Context<F> where F: FnMut(&[ast::Attribute]) -> bool {
@@ -117,13 +118,13 @@ fn fold_item_underscore<F>(cx: &mut Context<F>, item: ast::Item_) -> ast::Item_ 
     let item = match item {
         ast::ItemImpl(u, o, a, b, c, impl_items) => {
             let impl_items = impl_items.into_iter()
-                                       .filter(|ii| impl_item_in_cfg(cx, ii))
+                                       .filter(|ii| (cx.in_cfg)(&ii.attrs))
                                        .collect();
             ast::ItemImpl(u, o, a, b, c, impl_items)
         }
         ast::ItemTrait(u, a, b, methods) => {
             let methods = methods.into_iter()
-                                 .filter(|m| trait_method_in_cfg(cx, m))
+                                 .filter(|ti| (cx.in_cfg)(&ti.attrs))
                                  .collect();
             ast::ItemTrait(u, a, b, methods)
         }
@@ -132,7 +133,7 @@ fn fold_item_underscore<F>(cx: &mut Context<F>, item: ast::Item_) -> ast::Item_ 
         }
         ast::ItemEnum(def, generics) => {
             let variants = def.variants.into_iter().filter_map(|v| {
-                if !(cx.in_cfg)(v.node.attrs.as_slice()) {
+                if !(cx.in_cfg)(&v.node.attrs) {
                     None
                 } else {
                     Some(v.map(|Spanned {node: ast::Variant_ {id, name, attrs, kind,
@@ -172,7 +173,7 @@ fn fold_struct<F>(cx: &mut Context<F>, def: P<ast::StructDef>) -> P<ast::StructD
     def.map(|ast::StructDef { fields, ctor_id }| {
         ast::StructDef {
             fields: fields.into_iter().filter(|m| {
-                (cx.in_cfg)(m.node.attrs.as_slice())
+                (cx.in_cfg)(&m.node.attrs)
             }).collect(),
             ctor_id: ctor_id,
         }
@@ -223,7 +224,7 @@ fn fold_expr<F>(cx: &mut Context<F>, expr: P<ast::Expr>) -> P<ast::Expr> where
             node: match node {
                 ast::ExprMatch(m, arms, source) => {
                     ast::ExprMatch(m, arms.into_iter()
-                                        .filter(|a| (cx.in_cfg)(a.attrs.as_slice()))
+                                        .filter(|a| (cx.in_cfg)(&a.attrs))
                                         .collect(), source)
                 }
                 _ => node
@@ -236,32 +237,13 @@ fn fold_expr<F>(cx: &mut Context<F>, expr: P<ast::Expr>) -> P<ast::Expr> where
 fn item_in_cfg<F>(cx: &mut Context<F>, item: &ast::Item) -> bool where
     F: FnMut(&[ast::Attribute]) -> bool
 {
-    return (cx.in_cfg)(item.attrs.as_slice());
+    return (cx.in_cfg)(&item.attrs);
 }
 
 fn foreign_item_in_cfg<F>(cx: &mut Context<F>, item: &ast::ForeignItem) -> bool where
     F: FnMut(&[ast::Attribute]) -> bool
 {
-    return (cx.in_cfg)(item.attrs.as_slice());
-}
-
-fn trait_method_in_cfg<F>(cx: &mut Context<F>, meth: &ast::TraitItem) -> bool where
-    F: FnMut(&[ast::Attribute]) -> bool
-{
-    match *meth {
-        ast::RequiredMethod(ref meth) => (cx.in_cfg)(meth.attrs.as_slice()),
-        ast::ProvidedMethod(ref meth) => (cx.in_cfg)(meth.attrs.as_slice()),
-        ast::TypeTraitItem(ref typ) => (cx.in_cfg)(typ.attrs.as_slice()),
-    }
-}
-
-fn impl_item_in_cfg<F>(cx: &mut Context<F>, impl_item: &ast::ImplItem) -> bool where
-    F: FnMut(&[ast::Attribute]) -> bool
-{
-    match *impl_item {
-        ast::MethodImplItem(ref meth) => (cx.in_cfg)(meth.attrs.as_slice()),
-        ast::TypeImplItem(ref typ) => (cx.in_cfg)(typ.attrs.as_slice()),
-    }
+    return (cx.in_cfg)(&item.attrs);
 }
 
 // Determine if an item should be translated in the current crate
@@ -280,4 +262,57 @@ fn in_cfg(diagnostic: &SpanHandler, cfg: &[P<ast::MetaItem>], attrs: &[ast::Attr
 
         attr::cfg_matches(diagnostic, cfg, &*mis[0])
     })
+}
+
+struct CfgAttrFolder<'a> {
+    diag: &'a SpanHandler,
+    config: ast::CrateConfig,
+}
+
+// Process `#[cfg_attr]`.
+fn process_cfg_attr(diagnostic: &SpanHandler, krate: ast::Crate) -> ast::Crate {
+    let mut fld = CfgAttrFolder {
+        diag: diagnostic,
+        config: krate.config.clone(),
+    };
+    fld.fold_crate(krate)
+}
+
+impl<'a> fold::Folder for CfgAttrFolder<'a> {
+    fn fold_attribute(&mut self, attr: ast::Attribute) -> Option<ast::Attribute> {
+        if !attr.check_name("cfg_attr") {
+            return fold::noop_fold_attribute(attr, self);
+        }
+
+        let attr_list = match attr.meta_item_list() {
+            Some(attr_list) => attr_list,
+            None => {
+                self.diag.span_err(attr.span, "expected `#[cfg_attr(<cfg pattern>, <attr>)]`");
+                return None;
+            }
+        };
+        let (cfg, mi) = match (attr_list.len(), attr_list.get(0), attr_list.get(1)) {
+            (2, Some(cfg), Some(mi)) => (cfg, mi),
+            _ => {
+                self.diag.span_err(attr.span, "expected `#[cfg_attr(<cfg pattern>, <attr>)]`");
+                return None;
+            }
+        };
+
+        if attr::cfg_matches(self.diag, &self.config[..], &cfg) {
+            Some(respan(mi.span, ast::Attribute_ {
+                id: attr::mk_attr_id(),
+                style: attr.node.style,
+                value: mi.clone(),
+                is_sugared_doc: false,
+            }))
+        } else {
+            None
+        }
+    }
+
+    // Need the ability to run pre-expansion.
+    fn fold_mac(&mut self, mac: ast::Mac) -> ast::Mac {
+        fold::noop_fold_mac(mac, self)
+    }
 }

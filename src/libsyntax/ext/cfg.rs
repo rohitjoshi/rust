@@ -29,11 +29,11 @@ pub fn expand_cfg<'cx>(cx: &mut ExtCtxt,
     let mut p = cx.new_parser_from_tts(tts);
     let cfg = p.parse_meta_item();
 
-    if !p.eat(&token::Eof) {
+    if !panictry!(p.eat(&token::Eof)){
         cx.span_err(sp, "expected 1 cfg-pattern");
         return DummyResult::expr(sp);
     }
 
-    let matches_cfg = attr::cfg_matches(&cx.parse_sess.span_diagnostic, cx.cfg.as_slice(), &*cfg);
-    MacExpr::new(cx.expr_bool(sp, matches_cfg))
+    let matches_cfg = attr::cfg_matches(&cx.parse_sess.span_diagnostic, &cx.cfg, &*cfg);
+    MacEager::expr(cx.expr_bool(sp, matches_cfg))
 }

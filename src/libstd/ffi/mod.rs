@@ -10,16 +10,13 @@
 
 //! Utilities related to FFI bindings.
 
-#![unstable = "module just underwent fairly large reorganization and the dust \
-               still needs to settle"]
+#![stable(feature = "rust1", since = "1.0.0")]
 
-pub use self::c_str::CString;
-pub use self::c_str::c_str_to_bytes;
-pub use self::c_str::c_str_to_bytes_with_nul;
+#[stable(feature = "rust1", since = "1.0.0")]
+pub use self::c_str::{CString, CStr, NulError};
 
-pub use self::os_str::OsString;
-pub use self::os_str::OsStr;
-pub use self::os_str::AsOsStr;
+#[stable(feature = "rust1", since = "1.0.0")]
+pub use self::os_str::{OsString, OsStr};
 
 mod c_str;
 mod os_str;

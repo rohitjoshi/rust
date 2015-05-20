@@ -23,7 +23,7 @@ pub use self::Failure::*;
 use core::prelude::*;
 
 use core::cmp;
-use core::int;
+use core::isize;
 
 use sync::atomic::{AtomicUsize, AtomicIsize, AtomicBool, Ordering};
 use sync::mpsc::blocking::{self, SignalToken};
@@ -31,19 +31,19 @@ use sync::mpsc::mpsc_queue as mpsc;
 use sync::mpsc::select::StartResult::*;
 use sync::mpsc::select::StartResult;
 use sync::{Mutex, MutexGuard};
-use thread::Thread;
+use thread;
 
-const DISCONNECTED: int = int::MIN;
-const FUDGE: int = 1024;
+const DISCONNECTED: isize = isize::MIN;
+const FUDGE: isize = 1024;
 #[cfg(test)]
-const MAX_STEALS: int = 5;
+const MAX_STEALS: isize = 5;
 #[cfg(not(test))]
-const MAX_STEALS: int = 1 << 20;
+const MAX_STEALS: isize = 1 << 20;
 
 pub struct Packet<T> {
     queue: mpsc::Queue<T>,
     cnt: AtomicIsize, // How many items are on this channel
-    steals: int, // How many times has a port received without blocking?
+    steals: isize, // How many times has a port received without blocking?
     to_wake: AtomicUsize, // SignalToken for wake up
 
     // The number of channels which are currently using this packet.
@@ -64,7 +64,7 @@ pub enum Failure {
     Disconnected,
 }
 
-impl<T: Send> Packet<T> {
+impl<T> Packet<T> {
     // Creation of a packet *must* be followed by a call to postinit_lock
     // and later by inherit_blocker
     pub fn new() -> Packet<T> {
@@ -91,8 +91,8 @@ impl<T: Send> Packet<T> {
     }
 
     // This function is used at the creation of a shared packet to inherit a
-    // previously blocked task. This is done to prevent spurious wakeups of
-    // tasks in select().
+    // previously blocked thread. This is done to prevent spurious wakeups of
+    // threads in select().
     //
     // This can only be called at channel-creation time
     pub fn inherit_blocker(&mut self,
@@ -101,7 +101,7 @@ impl<T: Send> Packet<T> {
         token.map(|token| {
             assert_eq!(self.cnt.load(Ordering::SeqCst), 0);
             assert_eq!(self.to_wake.load(Ordering::SeqCst), 0);
-            self.to_wake.store(unsafe { token.cast_to_uint() }, Ordering::SeqCst);
+            self.to_wake.store(unsafe { token.cast_to_usize() }, Ordering::SeqCst);
             self.cnt.store(-1, Ordering::SeqCst);
 
             // This store is a little sketchy. What's happening here is that
@@ -194,7 +194,7 @@ impl<T: Send> Packet<T> {
                             match self.queue.pop() {
                                 mpsc::Data(..) => {}
                                 mpsc::Empty => break,
-                                mpsc::Inconsistent => Thread::yield_now(),
+                                mpsc::Inconsistent => thread::yield_now(),
                             }
                         }
                         // maybe we're done, if we're not the last ones
@@ -241,7 +241,7 @@ impl<T: Send> Packet<T> {
     // Returns true if blocking should proceed.
     fn decrement(&mut self, token: SignalToken) -> StartResult {
         assert_eq!(self.to_wake.load(Ordering::SeqCst), 0);
-        let ptr = unsafe { token.cast_to_uint() };
+        let ptr = unsafe { token.cast_to_usize() };
         self.to_wake.store(ptr, Ordering::SeqCst);
 
         let steals = self.steals;
@@ -258,7 +258,7 @@ impl<T: Send> Packet<T> {
         }
 
         self.to_wake.store(0, Ordering::SeqCst);
-        drop(unsafe { SignalToken::cast_from_uint(ptr) });
+        drop(unsafe { SignalToken::cast_from_usize(ptr) });
         Abort
     }
 
@@ -283,7 +283,7 @@ impl<T: Send> Packet<T> {
             mpsc::Inconsistent => {
                 let data;
                 loop {
-                    Thread::yield_now();
+                    thread::yield_now();
                     match self.queue.pop() {
                         mpsc::Data(t) => { data = t; break }
                         mpsc::Empty => panic!("inconsistent => empty"),
@@ -380,7 +380,7 @@ impl<T: Send> Packet<T> {
         let ptr = self.to_wake.load(Ordering::SeqCst);
         self.to_wake.store(0, Ordering::SeqCst);
         assert!(ptr != 0);
-        unsafe { SignalToken::cast_from_uint(ptr) }
+        unsafe { SignalToken::cast_from_usize(ptr) }
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -398,7 +398,7 @@ impl<T: Send> Packet<T> {
     }
 
     // increment the count on the channel (used for selection)
-    fn bump(&mut self, amt: int) -> int {
+    fn bump(&mut self, amt: isize) -> isize {
         match self.cnt.fetch_add(amt, Ordering::SeqCst) {
             DISCONNECTED => {
                 self.cnt.store(DISCONNECTED, Ordering::SeqCst);
@@ -424,7 +424,7 @@ impl<T: Send> Packet<T> {
         }
     }
 
-    // Cancels a previous task waiting on this port, returning whether there's
+    // Cancels a previous thread waiting on this port, returning whether there's
     // data on the port.
     //
     // This is similar to the stream implementation (hence fewer comments), but
@@ -460,7 +460,7 @@ impl<T: Send> Packet<T> {
                 drop(self.take_to_wake());
             } else {
                 while self.to_wake.load(Ordering::SeqCst) != 0 {
-                    Thread::yield_now();
+                    thread::yield_now();
                 }
             }
             // if the number of steals is -1, it was the pre-emptive -1 steal
@@ -473,8 +473,7 @@ impl<T: Send> Packet<T> {
     }
 }
 
-#[unsafe_destructor]
-impl<T: Send> Drop for Packet<T> {
+impl<T> Drop for Packet<T> {
     fn drop(&mut self) {
         // Note that this load is not only an assert for correctness about
         // disconnection, but also a proper fence before the read of

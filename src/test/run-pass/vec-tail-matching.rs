@@ -9,6 +9,9 @@
 // except according to those terms.
 
 
+
+#![feature(slice_patterns)]
+
 struct Foo {
     string: String
 }
@@ -31,8 +34,8 @@ pub fn main() {
                     unreachable!();
                 }
                 [Foo { string: ref a }, Foo { string: ref b }] => {
-                    assert_eq!("bar", a.as_slice().slice(0, a.len()));
-                    assert_eq!("baz", b.as_slice().slice(0, b.len()));
+                    assert_eq!("bar", &a[0..a.len()]);
+                    assert_eq!("baz", &b[0..b.len()]);
                 }
                 _ => {
                     unreachable!();

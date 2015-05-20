@@ -8,7 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+
 #![feature(advanced_slice_patterns)]
+#![feature(slice_patterns)]
 
 fn foldl<T, U, F>(values: &[T],
                   initial: U,
@@ -39,11 +41,11 @@ fn foldr<T, U, F>(values: &[T],
 }
 
 pub fn main() {
-    let x = &[1i, 2, 3, 4, 5];
+    let x = &[1, 2, 3, 4, 5];
 
-    let product = foldl(x, 1i, |a, b| a * *b);
+    let product = foldl(x, 1, |a, b| a * *b);
     assert_eq!(product, 120);
 
-    let sum = foldr(x, 0i, |a, b| *a + b);
+    let sum = foldr(x, 0, |a, b| *a + b);
     assert_eq!(sum, 15);
 }

@@ -5,20 +5,25 @@ to jump to any particular section.
 
 # Getting Started
 
-If you haven't seen Rust at all yet, the first thing you should read is the [30
-minute intro](intro.html). It will give you an overview of the basic ideas of Rust
-at a high level.
+If you haven't seen Rust at all yet, the first thing you should read is the
+introduction to [The Rust Programming Language](book/index.html). It'll give
+you a good idea of what Rust is like.
 
-Once you know you really want to learn Rust, the next step is reading [The
-Rust Programming Language](book/index.html). It is a lengthy explanation of
-Rust, its syntax, and its concepts. Upon completing the book, you'll be an
-intermediate Rust developer, and will have a good grasp of the fundamental
-ideas behind Rust.
+The book provides a lengthy explanation of Rust, its syntax, and its
+concepts. Upon completing the book, you'll be an intermediate Rust
+developer, and will have a good grasp of the fundamental ideas behind
+Rust.
+
+[Rust By Example][rbe] was originally a community resource, but was then
+donated to the Rust project. As the name implies, it teaches you Rust through a
+series of small examples.
+
+[rbe]: http://rustbyexample.com/
 
 # Community & Getting Help
 
 If you need help with something, or just want to talk about Rust with others,
-there's a few places you can do that:
+there are a few places you can do that:
 
 The Rust IRC channels on [irc.mozilla.org](http://irc.mozilla.org/) are the
 fastest way to get help.
@@ -39,10 +44,12 @@ Overflow](http://stackoverflow.com/questions/tagged/rust). Searching for your
 problem might reveal someone who has asked it before!
 
 There is an active [subreddit](http://reddit.com/r/rust) with lots of
-discussion about Rust.
+discussion and news about Rust.
 
-There is also a [developer forum](http://discuss.rust-lang.org/), where the
-development of Rust itself is discussed.
+There is also a [user forum](http://users.rust-lang.org), for all
+user-oriented discussion, and a [developer
+forum](http://internals.rust-lang.org/), where the development of Rust
+itself is discussed.
 
 # Specification
 
@@ -51,41 +58,31 @@ the language in as much detail as possible is in [the reference](reference.html)
 
 # Tools
 
-Rust's still a young language, so there isn't a ton of tooling yet, but the
+Rust is still a young language, so there isn't a ton of tooling yet, but the
 tools we have are really nice.
 
 [Cargo](http://crates.io) is Rust's package manager, and its website contains
 lots of good documentation.
 
-[The `rustdoc` manual](rustdoc.html) contains information about Rust's
-documentation tool.
+[`rustdoc`](book/documentation.html) is used to generate documentation for Rust code.
 
 # FAQs
 
-There are questions that are asked quite often, and so we've made FAQs for them:
+There are questions that are asked quite often, so we've made FAQs for them:
 
 * [Language Design FAQ](complement-design-faq.html)
 * [Language FAQ](complement-lang-faq.html)
 * [Project FAQ](complement-project-faq.html)
-* [How to submit a bug report](complement-bugreport.html)
+* [How to submit a bug report](https://github.com/rust-lang/rust/blob/master/CONTRIBUTING.md#bug-reports)
 
-# The standard library
+# The Standard Library
 
 We have [API documentation for the entire standard
 library](std/index.html). There's a list of crates on the left with more
 specific sections, or you can use the search bar at the top to search for
 something if you know its name.
 
-# External documentation
+# The Error Index
 
-*Note: While these are great resources for learning Rust, they may track a
-particular version of Rust that is likely not exactly the same as that for
-which this documentation was generated.*
-
-* [Rust by Example] - Short examples of common tasks in Rust (tracks the master
-  branch).
-* [Rust for Rubyists] - The first community tutorial for Rust. Tracks the last
-  stable release. Not just for Ruby programmers.
-
-[Rust by Example]: http://rustbyexample.com/
-[Rust for Rubyists]: http://www.rustforrubyists.com/
+If you encounter an error while compiling your code you may be able to look it
+up in the [Rust Compiler Error Index](error-index.html).

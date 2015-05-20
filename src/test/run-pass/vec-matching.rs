@@ -8,10 +8,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+
 #![feature(advanced_slice_patterns)]
+#![feature(slice_patterns)]
 
 fn a() {
-    let x = [1i];
+    let x = [1];
     match x {
         [a] => {
             assert_eq!(a, 1);
@@ -20,7 +22,7 @@ fn a() {
 }
 
 fn b() {
-    let x = [1i, 2, 3];
+    let x = [1, 2, 3];
     match x {
         [a, b, c..] => {
             assert_eq!(a, 1);
@@ -55,7 +57,7 @@ fn b() {
 }
 
 fn c() {
-    let x = [1i];
+    let x = [1];
     match x {
         [2, ..] => panic!(),
         [..] => ()
@@ -63,18 +65,18 @@ fn c() {
 }
 
 fn d() {
-    let x = [1i, 2, 3];
+    let x = [1, 2, 3];
     let branch = match x {
-        [1, 1, ..] => 0i,
-        [1, 2, 3, ..] => 1i,
-        [1, 2, ..] => 2i,
+        [1, 1, ..] => 0,
+        [1, 2, 3, ..] => 1,
+        [1, 2, ..] => 2,
         _ => 3
     };
     assert_eq!(branch, 1);
 }
 
 fn e() {
-    let x: &[int] = &[1i, 2, 3];
+    let x: &[isize] = &[1, 2, 3];
     match x {
         [1, 2] => (),
         [..] => ()

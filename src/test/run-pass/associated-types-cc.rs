@@ -13,7 +13,7 @@
 // Test that we are able to reference cross-crate traits that employ
 // associated types.
 
-extern crate "associated-types-cc-lib" as bar;
+extern crate associated_types_cc_lib as bar;
 
 use bar::Bar;
 
@@ -22,5 +22,5 @@ fn foo<B:Bar>(b: B) -> <B as Bar>::T {
 }
 
 fn main() {
-    println!("{}", foo(3i));
+    println!("{}", foo(3));
 }

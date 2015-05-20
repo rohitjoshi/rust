@@ -13,11 +13,10 @@
 // ignore-test
 
 fn main() {
-    let args : ~[String] = ::std::os::args();
+    let args : Vec<String> = ::std::os::args();
     ::std::io::println(args[0]);
 }
 
-// ignore-android: FIXME(#10381)
 // ignore-lldb
 
 // This test case checks whether compile unit names are set correctly, so that the correct default
@@ -26,6 +25,6 @@ fn main() {
 // compile-flags:-g
 // gdb-command:list
 // gdb-check:1[...]fn main() {
-// gdb-check:2[...]let args : ~[String] = ::std::os::args();
+// gdb-check:2[...]let args : Vec<String> = ::std::os::args();
 // gdb-check:3[...]::std::io::println(args[0]);
 // gdb-check:4[...]}

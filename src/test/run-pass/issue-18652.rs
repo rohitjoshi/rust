@@ -12,10 +12,11 @@
 // once closure as an optimization by trans.  This used to hit an
 // incorrect assert.
 
+
 #![feature(unboxed_closures)]
 
 fn main() {
     let x = 2u8;
     let y = 3u8;
-    assert_eq!((move |:| x + y)(), 5);
+    assert_eq!((move || x + y)(), 5);
 }

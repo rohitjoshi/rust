@@ -11,48 +11,37 @@ pub use self::Mode::*;
 
 use std::fmt;
 use std::str::FromStr;
+use std::path::PathBuf;
 
-#[cfg(stage0)] // NOTE: remove impl after snapshot
-#[derive(Clone, PartialEq, Show)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Mode {
     CompileFail,
+    ParseFail,
     RunFail,
     RunPass,
     RunPassValgrind,
     Pretty,
     DebugInfoGdb,
     DebugInfoLldb,
-    Codegen
+    Codegen,
+    Rustdoc,
 }
-
-#[cfg(not(stage0))] // NOTE: remove cfg after snapshot
-#[derive(Clone, PartialEq, Debug)]
-pub enum Mode {
-    CompileFail,
-    RunFail,
-    RunPass,
-    RunPassValgrind,
-    Pretty,
-    DebugInfoGdb,
-    DebugInfoLldb,
-    Codegen
-}
-
-
-impl Copy for Mode {}
 
 impl FromStr for Mode {
-    fn from_str(s: &str) -> Option<Mode> {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Mode, ()> {
         match s {
-          "compile-fail" => Some(CompileFail),
-          "run-fail" => Some(RunFail),
-          "run-pass" => Some(RunPass),
-          "run-pass-valgrind" => Some(RunPassValgrind),
-          "pretty" => Some(Pretty),
-          "debuginfo-lldb" => Some(DebugInfoLldb),
-          "debuginfo-gdb" => Some(DebugInfoGdb),
-          "codegen" => Some(Codegen),
-          _ => None,
+          "compile-fail" => Ok(CompileFail),
+          "parse-fail" => Ok(ParseFail),
+          "run-fail" => Ok(RunFail),
+          "run-pass" => Ok(RunPass),
+          "run-pass-valgrind" => Ok(RunPassValgrind),
+          "pretty" => Ok(Pretty),
+          "debuginfo-lldb" => Ok(DebugInfoLldb),
+          "debuginfo-gdb" => Ok(DebugInfoGdb),
+          "codegen" => Ok(Codegen),
+          "rustdoc" => Ok(Rustdoc),
+          _ => Err(()),
         }
     }
 }
@@ -61,6 +50,7 @@ impl fmt::Display for Mode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Display::fmt(match *self {
             CompileFail => "compile-fail",
+            ParseFail => "parse-fail",
             RunFail => "run-fail",
             RunPass => "run-pass",
             RunPassValgrind => "run-pass-valgrind",
@@ -68,6 +58,7 @@ impl fmt::Display for Mode {
             DebugInfoGdb => "debuginfo-gdb",
             DebugInfoLldb => "debuginfo-lldb",
             Codegen => "codegen",
+            Rustdoc => "rustdoc",
         }, f)
     }
 }
@@ -81,13 +72,19 @@ pub struct Config {
     pub run_lib_path: String,
 
     // The rustc executable
-    pub rustc_path: Path,
+    pub rustc_path: PathBuf,
+
+    // The rustdoc executable
+    pub rustdoc_path: PathBuf,
+
+    // The python executable
+    pub python: String,
 
     // The clang executable
-    pub clang_path: Option<Path>,
+    pub clang_path: Option<PathBuf>,
 
     // The llvm binaries path
-    pub llvm_bin_path: Option<Path>,
+    pub llvm_bin_path: Option<PathBuf>,
 
     // The valgrind path
     pub valgrind_path: Option<String>,
@@ -97,13 +94,13 @@ pub struct Config {
     pub force_valgrind: bool,
 
     // The directory containing the tests to run
-    pub src_base: Path,
+    pub src_base: PathBuf,
 
     // The directory where programs should be built
-    pub build_base: Path,
+    pub build_base: PathBuf,
 
     // Directory for auxiliary libraries
-    pub aux_base: Path,
+    pub aux_base: PathBuf,
 
     // The name of the stage being built (stage1, etc)
     pub stage_id: String,
@@ -118,7 +115,7 @@ pub struct Config {
     pub filter: Option<String>,
 
     // Write out a parseable log of tests that were run
-    pub logfile: Option<Path>,
+    pub logfile: Option<PathBuf>,
 
     // A command line to prefix program execution with,
     // for running under valgrind
@@ -146,7 +143,7 @@ pub struct Config {
     pub lldb_version: Option<String>,
 
     // Path to the android tools
-    pub android_cross_path: Path,
+    pub android_cross_path: PathBuf,
 
     // Extra parameter to run adb on arm-linux-androideabi
     pub adb_path: String,

@@ -14,8 +14,8 @@ enum ast<'a> {
 }
 
 fn build() {
-    let x = ast::num(3us);
-    let y = ast::num(4us);
+    let x = ast::num(3);
+    let y = ast::num(4);
     let z = ast::add(&x, &y);
     compute(&z);
 }

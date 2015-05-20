@@ -11,5 +11,4 @@
 //! The boolean type
 
 #![doc(primitive = "bool")]
-#![stable]
-
+#![stable(feature = "rust1", since = "1.0.0")]

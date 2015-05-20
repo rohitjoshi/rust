@@ -1,4 +1,3 @@
-
 // Copyright 2012-2014 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
@@ -11,18 +10,25 @@
 
 // Extending Num and using inherited static methods
 
+// pretty-expanded FIXME #23616
+
+#![feature(core)]
+
 use std::cmp::PartialOrd;
-use std::num::NumCast;
+
+pub trait NumCast {
+    fn from(i: i32) -> Option<Self>;
+}
 
 pub trait Num {
-    fn from_int(i: int) -> Self;
+    fn from_int(i: isize) -> Self;
     fn gt(&self, other: &Self) -> bool;
 }
 
 pub trait NumExt: NumCast + PartialOrd { }
 
 fn greater_than_one<T:NumExt>(n: &T) -> bool {
-    n.gt(&NumCast::from(1i).unwrap())
+    n.gt(&NumCast::from(1).unwrap())
 }
 
 pub fn main() {}

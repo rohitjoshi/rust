@@ -10,11 +10,10 @@
 
 // aux-build:macro_reexport_1.rs
 // aux-build:macro_reexport_2.rs
-// ignore-stage1
 
 #[macro_use] #[no_link]
 extern crate macro_reexport_2;
 
 fn main() {
-    assert_eq!(reexported!(), 3u);
+    assert_eq!(reexported!(), 3_usize);
 }

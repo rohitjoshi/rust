@@ -16,7 +16,7 @@
 /// format!-based argument list. See documentation in `std::fmt` for details on
 /// how to use the syntax.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```
 /// #[macro_use] extern crate log;
@@ -24,7 +24,7 @@
 /// fn main() {
 ///     log!(log::WARN, "this is a warning {}", "message");
 ///     log!(log::DEBUG, "this is a debug message");
-///     log!(6, "this is a custom logging level: {level}", level=6u);
+///     log!(6, "this is a custom logging level: {level}", level=6);
 /// }
 /// ```
 ///
@@ -64,13 +64,13 @@ macro_rules! log {
 
 /// A convenience macro for logging at the error log level.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```
 /// #[macro_use] extern crate log;
 ///
 /// fn main() {
-///     let error = 3u;
+///     let error = 3;
 ///     error!("the build has failed with error code: {}", error);
 /// }
 /// ```
@@ -89,13 +89,13 @@ macro_rules! error {
 
 /// A convenience macro for logging at the warning log level.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```
 /// #[macro_use] extern crate log;
 ///
 /// fn main() {
-///     let code = 3u;
+///     let code = 3;
 ///     warn!("you may like to know that a process exited with: {}", code);
 /// }
 /// ```
@@ -113,13 +113,13 @@ macro_rules! warn {
 
 /// A convenience macro for logging at the info log level.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```
 /// #[macro_use] extern crate log;
 ///
 /// fn main() {
-///     let ret = 3i;
+///     let ret = 3;
 ///     info!("this function is about to return: {}", ret);
 /// }
 /// ```
@@ -136,16 +136,16 @@ macro_rules! info {
 }
 
 /// A convenience macro for logging at the debug log level. This macro can also
-/// be omitted at compile time by passing `--cfg ndebug` to the compiler. If
+/// be omitted at compile time by passing `-C debug-assertions` to the compiler. If
 /// this option is not passed, then debug statements will be compiled.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```
 /// #[macro_use] extern crate log;
 ///
 /// fn main() {
-///     debug!("x = {x}, y = {y}", x=10i, y=20i);
+///     debug!("x = {x}, y = {y}", x=10, y=20);
 /// }
 /// ```
 ///
@@ -157,12 +157,12 @@ macro_rules! info {
 /// ```
 #[macro_export]
 macro_rules! debug {
-    ($($arg:tt)*) => (if cfg!(not(ndebug)) { log!(::log::DEBUG, $($arg)*) })
+    ($($arg:tt)*) => (if cfg!(debug_assertions) { log!(::log::DEBUG, $($arg)*) })
 }
 
 /// A macro to test whether a log level is enabled for the current module.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```
 /// #[macro_use] extern crate log;
@@ -192,9 +192,8 @@ macro_rules! debug {
 macro_rules! log_enabled {
     ($lvl:expr) => ({
         let lvl = $lvl;
-        (lvl != ::log::DEBUG || cfg!(not(ndebug))) &&
+        (lvl != ::log::DEBUG || cfg!(debug_assertions)) &&
         lvl <= ::log::log_level() &&
         ::log::mod_enabled(lvl, module_path!())
     })
 }
-

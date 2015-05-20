@@ -8,12 +8,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#![feature(slice_patterns)]
+
 fn main() {
-    let mut a = [1is, 2, 3, 4];
+    let mut a = [1, 2, 3, 4];
     let t = match a {
         [1, 2, tail..] => tail,
         _ => unreachable!()
     };
-    a[0] = 0; //~ ERROR cannot assign to `a[..]` because it is borrowed
+    println!("t[0]: {}", t[0]);
+    a[2] = 0; //~ ERROR cannot assign to `a[..]` because it is borrowed
+    println!("t[0]: {}", t[0]);
     t[0];
 }

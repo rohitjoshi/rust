@@ -14,22 +14,39 @@
 //!
 //! This API is completely unstable and subject to change.
 
+// Do not remove on snapshot creation. Needed for bootstrap. (Issue #22364)
+#![cfg_attr(stage0, feature(custom_attribute))]
 #![crate_name = "rustc"]
-#![unstable]
+#![unstable(feature = "rustc_private")]
 #![staged_api]
 #![crate_type = "dylib"]
 #![crate_type = "rlib"]
 #![doc(html_logo_url = "http://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
-      html_favicon_url = "http://www.rust-lang.org/favicon.ico",
+      html_favicon_url = "https://doc.rust-lang.org/favicon.ico",
       html_root_url = "http://doc.rust-lang.org/nightly/")]
 
-#![allow(unknown_features)]
-#![feature(quote)]
-#![feature(slicing_syntax, unsafe_destructor)]
+#![feature(associated_consts)]
+#![feature(box_patterns)]
 #![feature(box_syntax)]
-#![allow(unknown_features)] #![feature(int_uint)]
+#![feature(collections)]
+#![feature(core)]
+#![feature(duration)]
+#![feature(duration_span)]
+#![feature(fs_canonicalize)]
+#![feature(hash)]
+#![feature(into_cow)]
+#![feature(libc)]
+#![feature(path_ext)]
+#![feature(quote)]
 #![feature(rustc_diagnostic_macros)]
-#![allow(unstable)]
+#![feature(rustc_private)]
+#![feature(slice_patterns)]
+#![feature(staged_api)]
+#![feature(std_misc)]
+#![feature(str_char)]
+#![cfg_attr(test, feature(test))]
+
+#![allow(trivial_casts)]
 
 extern crate arena;
 extern crate flate;
@@ -39,6 +56,7 @@ extern crate graphviz;
 extern crate libc;
 extern crate rustc_llvm;
 extern crate rustc_back;
+extern crate rustc_data_structures;
 extern crate serialize;
 extern crate rbml;
 extern crate collections;
@@ -46,12 +64,15 @@ extern crate collections;
 #[macro_use] extern crate syntax;
 #[macro_use] #[no_link] extern crate rustc_bitflags;
 
-extern crate "serialize" as rustc_serialize; // used by deriving
+extern crate serialize as rustc_serialize; // used by deriving
 
 #[cfg(test)]
 extern crate test;
 
 pub use rustc_llvm as llvm;
+
+#[macro_use]
+mod macros;
 
 // NB: This module needs to be declared first so diagnostics are
 // registered before they are used.
@@ -73,13 +94,13 @@ pub mod back {
 pub mod middle {
     pub mod astconv_util;
     pub mod astencode;
+    pub mod cast;
     pub mod cfg;
     pub mod check_const;
     pub mod check_static_recursion;
     pub mod check_loop;
     pub mod check_match;
     pub mod check_rvalues;
-    pub mod check_static;
     pub mod const_eval;
     pub mod dataflow;
     pub mod dead;
@@ -89,9 +110,10 @@ pub mod middle {
     pub mod entry;
     pub mod expr_use_visitor;
     pub mod fast_reject;
-    pub mod graph;
+    pub mod free_region;
     pub mod intrinsicck;
     pub mod infer;
+    pub mod implicator;
     pub mod lang_items;
     pub mod liveness;
     pub mod mem_categorization;
@@ -106,6 +128,8 @@ pub mod middle {
     pub mod traits;
     pub mod ty;
     pub mod ty_fold;
+    pub mod ty_match;
+    pub mod ty_relate;
     pub mod ty_walk;
     pub mod weak_lang_items;
 }
@@ -119,14 +143,14 @@ pub mod plugin;
 pub mod lint;
 
 pub mod util {
-    pub use rustc_back::fs;
     pub use rustc_back::sha2;
 
     pub mod common;
     pub mod ppaux;
     pub mod nodemap;
-    pub mod snapshot_vec;
     pub mod lev_distance;
+    pub mod num;
+    pub mod fs;
 }
 
 pub mod lib {
@@ -141,3 +165,9 @@ pub mod lib {
 mod rustc {
     pub use lint;
 }
+
+// Build the diagnostics array at the end so that the metadata includes error use sites.
+#[cfg(stage0)]
+__build_diagnostic_array! { DIAGNOSTICS }
+#[cfg(not(stage0))]
+__build_diagnostic_array! { librustc, DIAGNOSTICS }

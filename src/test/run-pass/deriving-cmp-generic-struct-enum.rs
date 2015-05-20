@@ -8,8 +8,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// no-pretty-expanded FIXME #15189
-
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
 enum ES<T> {
     ES1 { x: T },
@@ -19,15 +17,15 @@ enum ES<T> {
 
 pub fn main() {
     let (es11, es12, es21, es22) = (ES::ES1 {
-        x: 1i
+        x: 1
     }, ES::ES1 {
-        x: 2i
+        x: 2
     }, ES::ES2 {
-        x: 1i,
-        y: 1i
+        x: 1,
+        y: 1
     }, ES::ES2 {
-        x: 1i,
-        y: 2i
+        x: 1,
+        y: 2
     });
 
     // in order for both PartialOrd and Ord

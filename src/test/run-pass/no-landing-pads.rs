@@ -10,7 +10,8 @@
 
 // compile-flags: -Z no-landing-pads
 
-use std::thread::Thread;
+
+use std::thread;
 
 static mut HIT: bool = false;
 
@@ -23,7 +24,7 @@ impl Drop for A {
 }
 
 fn main() {
-    Thread::scoped(move|| -> () {
+    thread::spawn(move|| -> () {
         let _a = A;
         panic!();
     }).join().err().unwrap();

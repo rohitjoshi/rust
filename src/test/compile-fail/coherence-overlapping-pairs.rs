@@ -8,14 +8,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// aux-build:coherence-lib.rs
+// aux-build:coherence_lib.rs
 
-extern crate "coherence-lib" as lib;
+extern crate coherence_lib as lib;
 use lib::Remote;
 
 struct Foo;
 
 impl<T> Remote for lib::Pair<T,Foo> { }
-//~^ ERROR type parameter `T` is not constrained
+//~^ ERROR type parameter `T` must be used as the type parameter for some local type
 
 fn main() { }

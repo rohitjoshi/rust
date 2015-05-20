@@ -8,9 +8,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+
 #![allow(unknown_features)]
 #![feature(box_syntax)]
-#![feature(old_orphan_check)]
+#![feature(rustc_private)]
 
 extern crate serialize;
 
@@ -23,8 +24,9 @@ struct A {
 }
 
 fn main() {
-    let obj = A { foo: box [true, false] };
-    let s = json::encode(&obj);
-    let obj2: A = json::decode(s.as_slice()).unwrap();
+    // FIXME (#22405): Replace `Box::new` with `box` here when/if possible.
+    let obj = A { foo: Box::new([true, false]) };
+    let s = json::encode(&obj).unwrap();
+    let obj2: A = json::decode(&s).unwrap();
     assert!(obj.foo == obj2.foo);
 }

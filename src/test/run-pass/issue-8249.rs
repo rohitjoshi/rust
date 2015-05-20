@@ -8,7 +8,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-trait A {}
+// pretty-expanded FIXME #23616
+
+trait A {
+    fn dummy(&self) { }
+}
 struct B;
 impl A for B {}
 
@@ -22,4 +26,3 @@ fn foo(a: &mut A) {
 
 pub fn main() {
 }
-

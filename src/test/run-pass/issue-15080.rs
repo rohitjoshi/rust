@@ -8,8 +8,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+
+#![feature(slice_patterns)]
+
 fn main() {
-    let mut x: &[_] = &[1i, 2, 3, 4];
+    let mut x: &[_] = &[1, 2, 3, 4];
 
     let mut result = vec!();
     loop {

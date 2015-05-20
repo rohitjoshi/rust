@@ -1,4 +1,3 @@
-
 // Copyright 2012-2014 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
@@ -9,18 +8,20 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// pretty-expanded FIXME #23616
+
 #![allow(unknown_features)]
-#![feature(box_syntax)]
+#![feature(box_syntax, collections)]
 
 extern crate collections;
-use std::collections::Bitv;
+use std::collections::BitVec;
 
 fn bitv_test() {
-    let mut v1 = box Bitv::from_elem(31, false);
-    let v2 = box Bitv::from_elem(31, true);
+    let mut v1: Box<_> = box BitVec::from_elem(31, false);
+    let v2: Box<_> = box BitVec::from_elem(31, true);
     v1.union(&*v2);
 }
 
 pub fn main() {
-    for _ in range(0i, 10000) { bitv_test(); }
+    for _ in 0..10000 { bitv_test(); }
 }

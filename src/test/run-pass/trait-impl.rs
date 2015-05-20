@@ -11,12 +11,15 @@
 // Test calling methods on an impl for a bare trait.
 
 // aux-build:traitimpl.rs
+
 extern crate traitimpl;
 use traitimpl::Bar;
 
-static mut COUNT: uint = 1;
+static mut COUNT: usize = 1;
 
-trait T {}
+trait T {
+    fn t(&self) {}
+}
 
 impl<'a> T+'a {
     fn foo(&self) {
@@ -27,13 +30,13 @@ impl<'a> T+'a {
     }
 }
 
-impl T for int {}
+impl T for isize {}
 
 struct Foo;
 impl<'a> Bar<'a> for Foo {}
 
 fn main() {
-    let x: &T = &42i;
+    let x: &T = &42;
 
     x.foo();
     T::foo(x);

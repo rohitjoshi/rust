@@ -8,11 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use middle::infer::{InferCtxt};
-use middle::mem_categorization::Typer;
+use middle::infer::InferCtxt;
 use middle::ty::{self, RegionEscape, Ty};
 use std::collections::HashSet;
-use std::collections::hash_map::Entry::{Occupied, Vacant};
 use std::default::Default;
 use syntax::ast;
 use util::common::ErrorReported;
@@ -55,7 +53,7 @@ pub struct FulfillmentContext<'tcx> {
     // Remembers the count of trait obligations that we have already
     // attempted to select. This is used to avoid repeating work
     // when `select_new_obligations` is called.
-    attempted_mark: uint,
+    attempted_mark: usize,
 
     // A set of constraints that regionck must validate. Each
     // constraint has the form `T:'a`, meaning "some type `T` must
@@ -125,7 +123,7 @@ impl<'tcx> FulfillmentContext<'tcx> {
         let mut selcx = SelectionContext::new(infcx, typer);
         let normalized = project::normalize_projection_type(&mut selcx, projection_ty, cause, 0);
 
-        for obligation in normalized.obligations.into_iter() {
+        for obligation in normalized.obligations {
             self.register_predicate_obligation(infcx, obligation);
         }
 
@@ -165,6 +163,8 @@ impl<'tcx> FulfillmentContext<'tcx> {
         // debug output much nicer to read and so on.
         let obligation = infcx.resolve_type_vars_if_possible(&obligation);
 
+        assert!(!obligation.has_escaping_regions());
+
         if !self.duplicate_set.insert(obligation.predicate.clone()) {
             debug!("register_predicate({}) -- already seen, skip", obligation.repr(infcx.tcx));
             return;
@@ -180,7 +180,7 @@ impl<'tcx> FulfillmentContext<'tcx> {
     {
         match self.region_obligations.get(&body_id) {
             None => Default::default(),
-            Some(vec) => vec.as_slice(),
+            Some(vec) => vec,
         }
     }
 
@@ -228,7 +228,7 @@ impl<'tcx> FulfillmentContext<'tcx> {
     }
 
     pub fn pending_obligations(&self) -> &[PredicateObligation<'tcx>] {
-        &self.predicates[]
+        &self.predicates
     }
 
     /// Attempts to select obligations using `selcx`. If `only_new_obligations` is true, then it
@@ -289,7 +289,7 @@ impl<'tcx> FulfillmentContext<'tcx> {
 
             // Now go through all the successful ones,
             // registering any nested obligations for the future.
-            for new_obligation in new_obligations.into_iter() {
+            for new_obligation in new_obligations {
                 self.register_predicate_obligation(selcx.infcx(), new_obligation);
             }
         }
@@ -298,7 +298,7 @@ impl<'tcx> FulfillmentContext<'tcx> {
                self.predicates.len(),
                errors.len());
 
-        if errors.len() == 0 {
+        if errors.is_empty() {
             Ok(())
         } else {
             Err(errors)
@@ -438,9 +438,7 @@ fn register_region_obligation<'tcx>(tcx: &ty::ctxt<'tcx>,
     debug!("register_region_obligation({})",
            region_obligation.repr(tcx));
 
-    match region_obligations.entry(region_obligation.cause.body_id) {
-        Vacant(entry) => { entry.insert(vec![region_obligation]); },
-        Occupied(mut entry) => { entry.get_mut().push(region_obligation); },
-    }
+    region_obligations.entry(region_obligation.cause.body_id).or_insert(vec![])
+        .push(region_obligation);
 
 }

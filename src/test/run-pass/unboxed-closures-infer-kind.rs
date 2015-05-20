@@ -11,6 +11,7 @@
 // Test that we can infer the "kind" of an unboxed closure based on
 // the expected type.
 
+
 #![feature(unboxed_closures)]
 
 // Test by-ref capture of environment in unboxed closure types
@@ -28,8 +29,8 @@ fn call_fn_once<F: FnOnce()>(f: F) {
 }
 
 fn main() {
-    let mut x = 0u;
-    let y = 2u;
+    let mut x = 0_usize;
+    let y = 2_usize;
 
     call_fn(|| assert_eq!(x, 0));
     call_fn_mut(|| x += y);

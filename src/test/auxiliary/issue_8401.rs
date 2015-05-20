@@ -12,14 +12,15 @@
 
 use std::mem;
 
-trait A {}
+trait A {
+    fn dummy(&self) { }
+}
 struct B;
 impl A for B {}
 
 fn bar<T>(_: &mut A, _: &T) {}
 
 fn foo<T>(t: &T) {
-    let b = B;
-    bar(unsafe { mem::transmute(&b as &A) }, t)
+    let mut b = B;
+    bar(&mut b as &mut A, t)
 }
-

@@ -10,7 +10,7 @@
 
 use llvm;
 use llvm::{ContextRef, ModuleRef, ValueRef, BuilderRef};
-use llvm::{TargetData};
+use llvm::TargetData;
 use llvm::mk_target_data;
 use metadata::common::LinkMeta;
 use middle::def::ExportMap;
@@ -18,10 +18,13 @@ use middle::traits;
 use trans::adt;
 use trans::base;
 use trans::builder::Builder;
-use trans::common::{ExternMap,tydesc_info,BuilderRef_res};
+use trans::common::{ExternMap,BuilderRef_res};
 use trans::debuginfo;
+use trans::declare;
+use trans::glue::DropGlueKind;
 use trans::monomorphize::MonoId;
 use trans::type_::{Type, TypeNames};
+use middle::subst::Substs;
 use middle::ty::{self, Ty};
 use session::config::NoDebugInfo;
 use session::Session;
@@ -37,18 +40,17 @@ use syntax::ast;
 use syntax::parse::token::InternedString;
 
 pub struct Stats {
-    pub n_static_tydescs: Cell<uint>,
-    pub n_glues_created: Cell<uint>,
-    pub n_null_glues: Cell<uint>,
-    pub n_real_glues: Cell<uint>,
-    pub n_fns: Cell<uint>,
-    pub n_monos: Cell<uint>,
-    pub n_inlines: Cell<uint>,
-    pub n_closures: Cell<uint>,
-    pub n_llvm_insns: Cell<uint>,
-    pub llvm_insns: RefCell<FnvHashMap<String, uint>>,
+    pub n_glues_created: Cell<usize>,
+    pub n_null_glues: Cell<usize>,
+    pub n_real_glues: Cell<usize>,
+    pub n_fns: Cell<usize>,
+    pub n_monos: Cell<usize>,
+    pub n_inlines: Cell<usize>,
+    pub n_closures: Cell<usize>,
+    pub n_llvm_insns: Cell<usize>,
+    pub llvm_insns: RefCell<FnvHashMap<String, usize>>,
     // (ident, llvm-instructions)
-    pub fn_stats: RefCell<Vec<(String, uint)> >,
+    pub fn_stats: RefCell<Vec<(String, usize)> >,
 }
 
 /// The shared portion of a `CrateContext`.  There is one `SharedCrateContext`
@@ -68,9 +70,12 @@ pub struct SharedCrateContext<'tcx> {
     symbol_hasher: RefCell<Sha256>,
     tcx: ty::ctxt<'tcx>,
     stats: Stats,
+    check_overflow: bool,
+    check_drop_flag_for_sanity: bool,
 
     available_monomorphizations: RefCell<FnvHashSet<String>>,
-    available_drop_glues: RefCell<FnvHashMap<Ty<'tcx>, String>>,
+    available_drop_glues: RefCell<FnvHashMap<DropGlueKind<'tcx>, String>>,
+    use_dll_storage_attrs: bool,
 }
 
 /// The local portion of a `CrateContext`.  There is one `LocalCrateContext`
@@ -86,11 +91,7 @@ pub struct LocalCrateContext<'tcx> {
     item_vals: RefCell<NodeMap<ValueRef>>,
     needs_unwind_cleanup_cache: RefCell<FnvHashMap<Ty<'tcx>, bool>>,
     fn_pointer_shims: RefCell<FnvHashMap<Ty<'tcx>, ValueRef>>,
-    drop_glues: RefCell<FnvHashMap<Ty<'tcx>, ValueRef>>,
-    tydescs: RefCell<FnvHashMap<Ty<'tcx>, Rc<tydesc_info<'tcx>>>>,
-    /// Set when running emit_tydescs to enforce that no more tydescs are
-    /// created.
-    finished_tydescs: Cell<bool>,
+    drop_glues: RefCell<FnvHashMap<DropGlueKind<'tcx>, ValueRef>>,
     /// Track mapping of external ids to local items imported for inlining
     external: RefCell<DefIdMap<Option<ast::NodeId>>>,
     /// Backwards version of the `external` map (inlined items to where they
@@ -98,24 +99,27 @@ pub struct LocalCrateContext<'tcx> {
     external_srcs: RefCell<NodeMap<ast::DefId>>,
     /// Cache instances of monomorphized functions
     monomorphized: RefCell<FnvHashMap<MonoId<'tcx>, ValueRef>>,
-    monomorphizing: RefCell<DefIdMap<uint>>,
+    monomorphizing: RefCell<DefIdMap<usize>>,
     /// Cache generated vtables
-    vtables: RefCell<FnvHashMap<(Ty<'tcx>, ty::PolyTraitRef<'tcx>), ValueRef>>,
+    vtables: RefCell<FnvHashMap<ty::PolyTraitRef<'tcx>, ValueRef>>,
     /// Cache of constant strings,
     const_cstr_cache: RefCell<FnvHashMap<InternedString, ValueRef>>,
 
     /// Reverse-direction for const ptrs cast from globals.
-    /// Key is an int, cast from a ValueRef holding a *T,
+    /// Key is a ValueRef holding a *T,
     /// Val is a ValueRef holding a *[T].
     ///
     /// Needed because LLVM loses pointer->pointee association
     /// when we ptrcast, and we have to ptrcast during translation
-    /// of a [T] const because we form a slice, a [*T,int] pair, not
-    /// a pointer to an LLVM array type.
-    const_globals: RefCell<FnvHashMap<int, ValueRef>>,
+    /// of a [T] const because we form a slice, a (*T,usize) pair, not
+    /// a pointer to an LLVM array type. Similar for trait objects.
+    const_unsized: RefCell<FnvHashMap<ValueRef, ValueRef>>,
+
+    /// Cache of emitted const globals (value -> global)
+    const_globals: RefCell<FnvHashMap<ValueRef, ValueRef>>,
 
     /// Cache of emitted const values
-    const_values: RefCell<NodeMap<ValueRef>>,
+    const_values: RefCell<FnvHashMap<(ast::NodeId, &'tcx Substs<'tcx>), ValueRef>>,
 
     /// Cache of emitted static values
     static_values: RefCell<NodeMap<ValueRef>>,
@@ -132,7 +136,6 @@ pub struct LocalCrateContext<'tcx> {
     llsizingtypes: RefCell<FnvHashMap<Ty<'tcx>, Type>>,
     adt_reprs: RefCell<FnvHashMap<Ty<'tcx>, Rc<adt::Repr<'tcx>>>>,
     type_hashcodes: RefCell<FnvHashMap<Ty<'tcx>, String>>,
-    all_llvm_symbols: RefCell<FnvHashSet<String>>,
     int_type: Type,
     opaque_vec_type: Type,
     builder: BuilderRef_res,
@@ -149,7 +152,7 @@ pub struct LocalCrateContext<'tcx> {
     /// Number of LLVM instructions translated into this `LocalCrateContext`.
     /// This is used to perform some basic load-balancing to keep all LLVM
     /// contexts around the same size.
-    n_llvm_insns: Cell<uint>,
+    n_llvm_insns: Cell<usize>,
 
     trait_cache: RefCell<FnvHashMap<ty::PolyTraitRef<'tcx>,
                                     traits::Vtable<'tcx, ()>>>,
@@ -160,12 +163,12 @@ pub struct CrateContext<'a, 'tcx: 'a> {
     local: &'a LocalCrateContext<'tcx>,
     /// The index of `local` in `shared.local_ccxs`.  This is used in
     /// `maybe_iter(true)` to identify the original `LocalCrateContext`.
-    index: uint,
+    index: usize,
 }
 
 pub struct CrateContextIterator<'a, 'tcx: 'a> {
     shared: &'a SharedCrateContext<'tcx>,
-    index: uint,
+    index: usize,
 }
 
 impl<'a, 'tcx> Iterator for CrateContextIterator<'a,'tcx> {
@@ -190,9 +193,9 @@ impl<'a, 'tcx> Iterator for CrateContextIterator<'a,'tcx> {
 /// The iterator produced by `CrateContext::maybe_iter`.
 pub struct CrateContextMaybeIterator<'a, 'tcx: 'a> {
     shared: &'a SharedCrateContext<'tcx>,
-    index: uint,
+    index: usize,
     single: bool,
-    origin: uint,
+    origin: usize,
 }
 
 impl<'a, 'tcx> Iterator for CrateContextMaybeIterator<'a, 'tcx> {
@@ -221,31 +224,78 @@ impl<'a, 'tcx> Iterator for CrateContextMaybeIterator<'a, 'tcx> {
 
 unsafe fn create_context_and_module(sess: &Session, mod_name: &str) -> (ContextRef, ModuleRef) {
     let llcx = llvm::LLVMContextCreate();
-    let mod_name = CString::from_slice(mod_name.as_bytes());
+    let mod_name = CString::new(mod_name).unwrap();
     let llmod = llvm::LLVMModuleCreateWithNameInContext(mod_name.as_ptr(), llcx);
 
-    let data_layout = sess.target.target.data_layout.as_slice();
-    let data_layout = CString::from_slice(data_layout.as_bytes());
+    let data_layout = sess.target.target.data_layout.as_bytes();
+    let data_layout = CString::new(data_layout).unwrap();
     llvm::LLVMSetDataLayout(llmod, data_layout.as_ptr());
 
-    let llvm_target = sess.target.target.llvm_target.as_slice();
-    let llvm_target = CString::from_slice(llvm_target.as_bytes());
+    let llvm_target = sess.target.target.llvm_target.as_bytes();
+    let llvm_target = CString::new(llvm_target).unwrap();
     llvm::LLVMRustSetNormalizedTarget(llmod, llvm_target.as_ptr());
     (llcx, llmod)
 }
 
 impl<'tcx> SharedCrateContext<'tcx> {
     pub fn new(crate_name: &str,
-               local_count: uint,
+               local_count: usize,
                tcx: ty::ctxt<'tcx>,
                export_map: ExportMap,
                symbol_hasher: Sha256,
                link_meta: LinkMeta,
-               reachable: NodeSet)
+               reachable: NodeSet,
+               check_overflow: bool,
+               check_drop_flag_for_sanity: bool)
                -> SharedCrateContext<'tcx> {
         let (metadata_llcx, metadata_llmod) = unsafe {
             create_context_and_module(&tcx.sess, "metadata")
         };
+
+        // An interesting part of Windows which MSVC forces our hand on (and
+        // apparently MinGW didn't) is the usage of `dllimport` and `dllexport`
+        // attributes in LLVM IR as well as native dependencies (in C these
+        // correspond to `__declspec(dllimport)`).
+        //
+        // Whenever a dynamic library is built by MSVC it must have its public
+        // interface specified by functions tagged with `dllexport` or otherwise
+        // they're not available to be linked against. This poses a few problems
+        // for the compiler, some of which are somewhat fundamental, but we use
+        // the `use_dll_storage_attrs` variable below to attach the `dllexport`
+        // attribute to all LLVM functions that are reachable (e.g. they're
+        // already tagged with external linkage). This is suboptimal for a few
+        // reasons:
+        //
+        // * If an object file will never be included in a dynamic library,
+        //   there's no need to attach the dllexport attribute. Most object
+        //   files in Rust are not destined to become part of a dll as binaries
+        //   are statically linked by default.
+        // * If the compiler is emitting both an rlib and a dylib, the same
+        //   source object file is currently used but with MSVC this may be less
+        //   feasible. The compiler may be able to get around this, but it may
+        //   involve some invasive changes to deal with this.
+        //
+        // The flipside of this situation is that whenever you link to a dll and
+        // you import a function from it, the import should be tagged with
+        // `dllimport`. At this time, however, the compiler does not emit
+        // `dllimport` for any declarations other than constants (where it is
+        // required), which is again suboptimal for even more reasons!
+        //
+        // * Calling a function imported from another dll without using
+        //   `dllimport` causes the linker/compiler to have extra overhead (one
+        //   `jmp` instruction on x86) when calling the function.
+        // * The same object file may be used in different circumstances, so a
+        //   function may be imported from a dll if the object is linked into a
+        //   dll, but it may be just linked against if linked into an rlib.
+        // * The compiler has no knowledge about whether native functions should
+        //   be tagged dllimport or not.
+        //
+        // For now the compiler takes the perf hit (I do not have any numbers to
+        // this effect) by marking very little as `dllimport` and praying the
+        // linker will take care of everything. Fixing this problem will likely
+        // require adding a few attributes to Rust itself (feature gated at the
+        // start) and then strongly recommending static linkage on MSVC!
+        let use_dll_storage_attrs = tcx.sess.target.target.options.is_like_msvc;
 
         let mut shared_ccx = SharedCrateContext {
             local_ccxs: Vec::with_capacity(local_count),
@@ -258,23 +308,25 @@ impl<'tcx> SharedCrateContext<'tcx> {
             symbol_hasher: RefCell::new(symbol_hasher),
             tcx: tcx,
             stats: Stats {
-                n_static_tydescs: Cell::new(0u),
-                n_glues_created: Cell::new(0u),
-                n_null_glues: Cell::new(0u),
-                n_real_glues: Cell::new(0u),
-                n_fns: Cell::new(0u),
-                n_monos: Cell::new(0u),
-                n_inlines: Cell::new(0u),
-                n_closures: Cell::new(0u),
-                n_llvm_insns: Cell::new(0u),
+                n_glues_created: Cell::new(0),
+                n_null_glues: Cell::new(0),
+                n_real_glues: Cell::new(0),
+                n_fns: Cell::new(0),
+                n_monos: Cell::new(0),
+                n_inlines: Cell::new(0),
+                n_closures: Cell::new(0),
+                n_llvm_insns: Cell::new(0),
                 llvm_insns: RefCell::new(FnvHashMap()),
                 fn_stats: RefCell::new(Vec::new()),
             },
+            check_overflow: check_overflow,
+            check_drop_flag_for_sanity: check_drop_flag_for_sanity,
             available_monomorphizations: RefCell::new(FnvHashSet()),
             available_drop_glues: RefCell::new(FnvHashMap()),
+            use_dll_storage_attrs: use_dll_storage_attrs,
         };
 
-        for i in range(0, local_count) {
+        for i in 0..local_count {
             // Append ".rs" to crate name as LLVM module identifier.
             //
             // LLVM code generator emits a ".file filename" directive
@@ -284,7 +336,7 @@ impl<'tcx> SharedCrateContext<'tcx> {
             // such as a function name in the module.
             // 1. http://llvm.org/bugs/show_bug.cgi?id=11479
             let llmod_id = format!("{}.{}.rs", crate_name, i);
-            let local_ccx = LocalCrateContext::new(&shared_ccx, &llmod_id[]);
+            let local_ccx = LocalCrateContext::new(&shared_ccx, &llmod_id[..]);
             shared_ccx.local_ccxs.push(local_ccx);
         }
 
@@ -298,7 +350,7 @@ impl<'tcx> SharedCrateContext<'tcx> {
         }
     }
 
-    pub fn get_ccx<'a>(&'a self, index: uint) -> CrateContext<'a, 'tcx> {
+    pub fn get_ccx<'a>(&'a self, index: usize) -> CrateContext<'a, 'tcx> {
         CrateContext {
             shared: self,
             local: &self.local_ccxs[index],
@@ -310,7 +362,7 @@ impl<'tcx> SharedCrateContext<'tcx> {
         let (local_ccx, index) =
             self.local_ccxs
                 .iter()
-                .zip(range(0, self.local_ccxs.len()))
+                .zip(0..self.local_ccxs.len())
                 .min_by(|&(local_ccx, _idx)| local_ccx.n_llvm_insns.get())
                 .unwrap();
         CrateContext {
@@ -360,6 +412,10 @@ impl<'tcx> SharedCrateContext<'tcx> {
     pub fn stats<'a>(&'a self) -> &'a Stats {
         &self.stats
     }
+
+    pub fn use_dll_storage_attrs(&self) -> bool {
+        self.use_dll_storage_attrs
+    }
 }
 
 impl<'tcx> LocalCrateContext<'tcx> {
@@ -374,7 +430,7 @@ impl<'tcx> LocalCrateContext<'tcx> {
                                           .target
                                           .target
                                           .data_layout
-                                          []);
+                                          );
 
             let dbg_cx = if shared.tcx.sess.opts.debuginfo != NoDebugInfo {
                 Some(debuginfo::CrateDebugContext::new(llmod))
@@ -392,16 +448,15 @@ impl<'tcx> LocalCrateContext<'tcx> {
                 needs_unwind_cleanup_cache: RefCell::new(FnvHashMap()),
                 fn_pointer_shims: RefCell::new(FnvHashMap()),
                 drop_glues: RefCell::new(FnvHashMap()),
-                tydescs: RefCell::new(FnvHashMap()),
-                finished_tydescs: Cell::new(false),
                 external: RefCell::new(DefIdMap()),
                 external_srcs: RefCell::new(NodeMap()),
                 monomorphized: RefCell::new(FnvHashMap()),
                 monomorphizing: RefCell::new(DefIdMap()),
                 vtables: RefCell::new(FnvHashMap()),
                 const_cstr_cache: RefCell::new(FnvHashMap()),
+                const_unsized: RefCell::new(FnvHashMap()),
                 const_globals: RefCell::new(FnvHashMap()),
-                const_values: RefCell::new(NodeMap()),
+                const_values: RefCell::new(FnvHashMap()),
                 static_values: RefCell::new(NodeMap()),
                 extern_const_values: RefCell::new(DefIdMap()),
                 impl_method_cache: RefCell::new(FnvHashMap()),
@@ -410,7 +465,6 @@ impl<'tcx> LocalCrateContext<'tcx> {
                 llsizingtypes: RefCell::new(FnvHashMap()),
                 adt_reprs: RefCell::new(FnvHashMap()),
                 type_hashcodes: RefCell::new(FnvHashMap()),
-                all_llvm_symbols: RefCell::new(FnvHashSet()),
                 int_type: Type::from_ref(ptr::null_mut()),
                 opaque_vec_type: Type::from_ref(ptr::null_mut()),
                 builder: BuilderRef_res(llvm::LLVMCreateBuilderInContext(llcx)),
@@ -418,7 +472,7 @@ impl<'tcx> LocalCrateContext<'tcx> {
                 dbg_cx: dbg_cx,
                 eh_personality: RefCell::new(None),
                 intrinsics: RefCell::new(FnvHashMap()),
-                n_llvm_insns: Cell::new(0u),
+                n_llvm_insns: Cell::new(0),
                 trait_cache: RefCell::new(FnvHashMap()),
             };
 
@@ -433,8 +487,6 @@ impl<'tcx> LocalCrateContext<'tcx> {
                 let mut str_slice_ty = Type::named_struct(&ccx, "str_slice");
                 str_slice_ty.set_struct_body(&[Type::i8p(&ccx), ccx.int_type()], false);
                 ccx.tn().associate_type("str_slice", &str_slice_ty);
-
-                ccx.tn().associate_type("tydesc", &Type::tydesc(&ccx, str_slice_ty));
 
                 if ccx.sess().count_llvm_insns() {
                     base::init_insn_ctxt()
@@ -458,7 +510,7 @@ impl<'tcx> LocalCrateContext<'tcx> {
         CrateContext {
             shared: shared,
             local: self,
-            index: -1 as uint,
+            index: !0 as usize,
         }
     }
 }
@@ -509,10 +561,6 @@ impl<'b, 'tcx> CrateContext<'b, 'tcx> {
 
     pub fn raw_builder<'a>(&'a self) -> BuilderRef {
         self.local.builder.b
-    }
-
-    pub fn tydesc_type(&self) -> Type {
-        self.local.tn.find_type("tydesc").unwrap()
     }
 
     pub fn get_intrinsic(&self, key: & &'static str) -> ValueRef {
@@ -578,16 +626,8 @@ impl<'b, 'tcx> CrateContext<'b, 'tcx> {
         &self.local.fn_pointer_shims
     }
 
-    pub fn drop_glues<'a>(&'a self) -> &'a RefCell<FnvHashMap<Ty<'tcx>, ValueRef>> {
+    pub fn drop_glues<'a>(&'a self) -> &'a RefCell<FnvHashMap<DropGlueKind<'tcx>, ValueRef>> {
         &self.local.drop_glues
-    }
-
-    pub fn tydescs<'a>(&'a self) -> &'a RefCell<FnvHashMap<Ty<'tcx>, Rc<tydesc_info<'tcx>>>> {
-        &self.local.tydescs
-    }
-
-    pub fn finished_tydescs<'a>(&'a self) -> &'a Cell<bool> {
-        &self.local.finished_tydescs
     }
 
     pub fn external<'a>(&'a self) -> &'a RefCell<DefIdMap<Option<ast::NodeId>>> {
@@ -602,12 +642,11 @@ impl<'b, 'tcx> CrateContext<'b, 'tcx> {
         &self.local.monomorphized
     }
 
-    pub fn monomorphizing<'a>(&'a self) -> &'a RefCell<DefIdMap<uint>> {
+    pub fn monomorphizing<'a>(&'a self) -> &'a RefCell<DefIdMap<usize>> {
         &self.local.monomorphizing
     }
 
-    pub fn vtables<'a>(&'a self) -> &'a RefCell<FnvHashMap<(Ty<'tcx>, ty::PolyTraitRef<'tcx>),
-                                                            ValueRef>> {
+    pub fn vtables<'a>(&'a self) -> &'a RefCell<FnvHashMap<ty::PolyTraitRef<'tcx>, ValueRef>> {
         &self.local.vtables
     }
 
@@ -615,11 +654,16 @@ impl<'b, 'tcx> CrateContext<'b, 'tcx> {
         &self.local.const_cstr_cache
     }
 
-    pub fn const_globals<'a>(&'a self) -> &'a RefCell<FnvHashMap<int, ValueRef>> {
+    pub fn const_unsized<'a>(&'a self) -> &'a RefCell<FnvHashMap<ValueRef, ValueRef>> {
+        &self.local.const_unsized
+    }
+
+    pub fn const_globals<'a>(&'a self) -> &'a RefCell<FnvHashMap<ValueRef, ValueRef>> {
         &self.local.const_globals
     }
 
-    pub fn const_values<'a>(&'a self) -> &'a RefCell<NodeMap<ValueRef>> {
+    pub fn const_values<'a>(&'a self) -> &'a RefCell<FnvHashMap<(ast::NodeId, &'tcx Substs<'tcx>),
+                                                                ValueRef>> {
         &self.local.const_values
     }
 
@@ -660,10 +704,6 @@ impl<'b, 'tcx> CrateContext<'b, 'tcx> {
         &self.local.type_hashcodes
     }
 
-    pub fn all_llvm_symbols<'a>(&'a self) -> &'a RefCell<FnvHashSet<String>> {
-        &self.local.all_llvm_symbols
-    }
-
     pub fn stats<'a>(&'a self) -> &'a Stats {
         &self.shared.stats
     }
@@ -672,7 +712,7 @@ impl<'b, 'tcx> CrateContext<'b, 'tcx> {
         &self.shared.available_monomorphizations
     }
 
-    pub fn available_drop_glues<'a>(&'a self) -> &'a RefCell<FnvHashMap<Ty<'tcx>, String>> {
+    pub fn available_drop_glues(&self) -> &RefCell<FnvHashMap<DropGlueKind<'tcx>, String>> {
         &self.shared.available_drop_glues
     }
 
@@ -721,7 +761,7 @@ impl<'b, 'tcx> CrateContext<'b, 'tcx> {
     /// currently conservatively bounded to 1 << 47 as that is enough to cover the current usable
     /// address space on 64-bit ARMv8 and x86_64.
     pub fn obj_size_bound(&self) -> u64 {
-        match &self.sess().target.target.target_pointer_width[] {
+        match &self.sess().target.target.target_pointer_width[..] {
             "32" => 1 << 31,
             "64" => 1 << 47,
             _ => unreachable!() // error handled by config::build_target_config
@@ -731,25 +771,40 @@ impl<'b, 'tcx> CrateContext<'b, 'tcx> {
     pub fn report_overbig_object(&self, obj: Ty<'tcx>) -> ! {
         self.sess().fatal(
             &format!("the type `{}` is too big for the current architecture",
-                    obj.repr(self.tcx()))[])
+                    obj.repr(self.tcx())))
+    }
+
+    pub fn check_overflow(&self) -> bool {
+        self.shared.check_overflow
+    }
+
+    pub fn check_drop_flag_for_sanity(&self) -> bool {
+        // This controls whether we emit a conditional llvm.debugtrap
+        // guarded on whether the dropflag is one of its (two) valid
+        // values.
+        self.shared.check_drop_flag_for_sanity
+    }
+
+    pub fn use_dll_storage_attrs(&self) -> bool {
+        self.shared.use_dll_storage_attrs()
     }
 }
 
+/// Declare any llvm intrinsics that you might need
 fn declare_intrinsic(ccx: &CrateContext, key: & &'static str) -> Option<ValueRef> {
     macro_rules! ifn {
         ($name:expr, fn() -> $ret:expr) => (
             if *key == $name {
-                let f = base::decl_cdecl_fn(
-                    ccx, $name, Type::func(&[], &$ret),
-                    ty::mk_nil(ccx.tcx()));
+                let f = declare::declare_cfn(ccx, $name, Type::func(&[], &$ret),
+                                             ty::mk_nil(ccx.tcx()));
                 ccx.intrinsics().borrow_mut().insert($name, f.clone());
                 return Some(f);
             }
         );
         ($name:expr, fn($($arg:expr),*) -> $ret:expr) => (
             if *key == $name {
-                let f = base::decl_cdecl_fn(ccx, $name,
-                                  Type::func(&[$($arg),*], &$ret), ty::mk_nil(ccx.tcx()));
+                let f = declare::declare_cfn(ccx, $name, Type::func(&[$($arg),*], &$ret),
+                                             ty::mk_nil(ccx.tcx()));
                 ccx.intrinsics().borrow_mut().insert($name, f.clone());
                 return Some(f);
             }
@@ -880,16 +935,7 @@ fn declare_intrinsic(ccx: &CrateContext, key: & &'static str) -> Option<ValueRef
     // were introduced in LLVM 3.4, so we case on that.
     macro_rules! compatible_ifn {
         ($name:expr, $cname:ident ($($arg:expr),*) -> $ret:expr) => (
-            if unsafe { llvm::LLVMVersionMinor() >= 4 } {
-                // The `if key == $name` is already in ifn!
-                ifn!($name, fn($($arg),*) -> $ret);
-            } else if *key == $name {
-                let f = base::decl_cdecl_fn(ccx, stringify!($cname),
-                                      Type::func(&[$($arg),*], &$ret),
-                                      ty::mk_nil(ccx.tcx()));
-                ccx.intrinsics().borrow_mut().insert($name, f.clone());
-                return Some(f);
-            }
+            ifn!($name, fn($($arg),*) -> $ret);
         )
     }
 

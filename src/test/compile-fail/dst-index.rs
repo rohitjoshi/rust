@@ -14,26 +14,24 @@
 use std::ops::Index;
 use std::fmt::Debug;
 
+#[derive(Copy, Clone)]
 struct S;
-
-impl Copy for S {}
 
 impl Index<usize> for S {
     type Output = str;
 
-    fn index<'a>(&'a self, _: &usize) -> &'a str {
+    fn index(&self, _: usize) -> &str {
         "hello"
     }
 }
 
+#[derive(Copy, Clone)]
 struct T;
-
-impl Copy for T {}
 
 impl Index<usize> for T {
     type Output = Debug + 'static;
 
-    fn index<'a>(&'a self, idx: &usize) -> &'a (Debug + 'static) {
+    fn index<'a>(&'a self, idx: usize) -> &'a (Debug + 'static) {
         static x: usize = 42;
         &x
     }

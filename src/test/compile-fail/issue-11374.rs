@@ -8,15 +8,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::old_io;
+use std::io::{self, Read};
 use std::vec;
 
 pub struct Container<'a> {
-    reader: &'a mut Reader //~ ERROR explicit lifetime bound required
+    reader: &'a mut Read
 }
 
 impl<'a> Container<'a> {
-    pub fn wrap<'s>(reader: &'s mut Reader) -> Container<'s> {
+    pub fn wrap<'s>(reader: &'s mut io::Read) -> Container<'s> {
         Container { reader: reader }
     }
 
@@ -26,12 +26,12 @@ impl<'a> Container<'a> {
 }
 
 pub fn for_stdin<'a>() -> Container<'a> {
-    let mut r = old_io::stdin();
-    Container::wrap(&mut r as &mut Reader)
+    let mut r = io::stdin();
+    Container::wrap(&mut r as &mut io::Read)
 }
 
 fn main() {
     let mut c = for_stdin();
     let mut v = Vec::new();
-    c.read_to(v.as_mut_slice());
+    c.read_to(v); //~ ERROR mismatched types
 }

@@ -14,9 +14,10 @@ use self::UndoEntry::*;
 
 use middle::ty::{self, Ty};
 use std::cmp::min;
+use std::marker::PhantomData;
 use std::mem;
 use std::u32;
-use util::snapshot_vec as sv;
+use rustc_data_structures::snapshot_vec as sv;
 
 pub struct TypeVariableTable<'tcx> {
     values: sv::SnapshotVec<Delegate<'tcx>>,
@@ -42,13 +43,13 @@ enum UndoEntry {
     Relate(ty::TyVid, ty::TyVid),
 }
 
-struct Delegate<'tcx>;
+struct Delegate<'tcx>(PhantomData<&'tcx ()>);
 
 type Relation = (RelationDir, ty::TyVid);
 
-#[derive(Copy, PartialEq, Show)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum RelationDir {
-    SubtypeOf, SupertypeOf, EqTo
+    SubtypeOf, SupertypeOf, EqTo, BiTo
 }
 
 impl RelationDir {
@@ -56,22 +57,23 @@ impl RelationDir {
         match self {
             SubtypeOf => SupertypeOf,
             SupertypeOf => SubtypeOf,
-            EqTo => EqTo
+            EqTo => EqTo,
+            BiTo => BiTo,
         }
     }
 }
 
 impl<'tcx> TypeVariableTable<'tcx> {
     pub fn new() -> TypeVariableTable<'tcx> {
-        TypeVariableTable { values: sv::SnapshotVec::new(Delegate) }
+        TypeVariableTable { values: sv::SnapshotVec::new() }
     }
 
     fn relations<'a>(&'a mut self, a: ty::TyVid) -> &'a mut Vec<Relation> {
-        relations(self.values.get_mut(a.index as uint))
+        relations(self.values.get_mut(a.index as usize))
     }
 
     pub fn var_diverges<'a>(&'a self, vid: ty::TyVid) -> bool {
-        self.values.get(vid.index as uint).diverging
+        self.values.get(vid.index as usize).diverging
     }
 
     /// Records that `a <: b`, `a :> b`, or `a == b`, depending on `dir`.
@@ -95,7 +97,7 @@ impl<'tcx> TypeVariableTable<'tcx> {
         stack: &mut Vec<(Ty<'tcx>, RelationDir, ty::TyVid)>)
     {
         let old_value = {
-            let value_ptr = &mut self.values.get_mut(vid.index as uint).value;
+            let value_ptr = &mut self.values.get_mut(vid.index as usize).value;
             mem::replace(value_ptr, Known(ty))
         };
 
@@ -105,7 +107,7 @@ impl<'tcx> TypeVariableTable<'tcx> {
                                already instantiated")
         };
 
-        for &(dir, vid) in relations.iter() {
+        for &(dir, vid) in &relations {
             stack.push((ty, dir, vid));
         }
 
@@ -121,7 +123,7 @@ impl<'tcx> TypeVariableTable<'tcx> {
     }
 
     pub fn probe(&self, vid: ty::TyVid) -> Option<Ty<'tcx>> {
-        match self.values.get(vid.index as uint).value {
+        match self.values.get(vid.index as usize).value {
             Bounded(..) => None,
             Known(t) => Some(t)
         }
@@ -165,7 +167,7 @@ impl<'tcx> TypeVariableTable<'tcx> {
         let mut escaping_types = Vec::new();
         let actions_since_snapshot = self.values.actions_since_snapshot(&s.snapshot);
         debug!("actions_since_snapshot.len() = {}", actions_since_snapshot.len());
-        for action in actions_since_snapshot.iter() {
+        for action in actions_since_snapshot {
             match *action {
                 sv::UndoLog::NewElem(index) => {
                     // if any new variables were created during the
@@ -199,17 +201,15 @@ impl<'tcx> sv::SnapshotVecDelegate for Delegate<'tcx> {
     type Value = TypeVariableData<'tcx>;
     type Undo = UndoEntry;
 
-    fn reverse(&mut self,
-               values: &mut Vec<TypeVariableData<'tcx>>,
-               action: UndoEntry) {
+    fn reverse(values: &mut Vec<TypeVariableData<'tcx>>, action: UndoEntry) {
         match action {
             SpecifyVar(vid, relations) => {
-                values[vid.index as uint].value = Bounded(relations);
+                values[vid.index as usize].value = Bounded(relations);
             }
 
             Relate(a, b) => {
-                relations(&mut (*values)[a.index as uint]).pop();
-                relations(&mut (*values)[b.index as uint]).pop();
+                relations(&mut (*values)[a.index as usize]).pop();
+                relations(&mut (*values)[b.index as usize]).pop();
             }
         }
     }

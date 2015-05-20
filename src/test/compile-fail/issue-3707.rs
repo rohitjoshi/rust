@@ -14,15 +14,15 @@ struct Obj {
 
 impl Obj {
     pub fn boom() -> bool {
-        return 1is+1 == 2
+        return 1+1 == 2
     }
     pub fn chirp(&self) {
-        self.boom(); //~ ERROR `&Obj` does not implement any method in scope named `boom`
+        self.boom(); //~ ERROR no method named `boom` found for type `&Obj` in the current scope
     }
 }
 
 fn main() {
     let o = Obj { member: 0 };
     o.chirp();
-    1is + 1;
+    1 + 1;
 }

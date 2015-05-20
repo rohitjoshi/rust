@@ -9,6 +9,7 @@
 // except according to those terms.
 pub use self::MaybeTyped::*;
 
+use rustc_lint;
 use rustc_driver::driver;
 use rustc::session::{self, config};
 use rustc::session::config::UnstableFeatures;
@@ -19,7 +20,7 @@ use rustc_resolve as resolve;
 
 use syntax::{ast, ast_map, codemap, diagnostic};
 
-use std::cell::RefCell;
+use std::cell::{RefCell, Cell};
 use std::collections::{HashMap, HashSet};
 
 use visit_ast::RustdocVisitor;
@@ -47,6 +48,7 @@ pub struct DocContext<'tcx> {
     pub external_typarams: RefCell<Option<HashMap<ast::DefId, String>>>,
     pub inlined: RefCell<Option<HashSet<ast::DefId>>>,
     pub populated_crate_impls: RefCell<HashSet<ast::CrateNum>>,
+    pub deref_trait_did: Cell<Option<ast::DefId>>,
 }
 
 impl<'tcx> DocContext<'tcx> {
@@ -74,9 +76,9 @@ pub struct CrateAnalysis {
     pub exported_items: privacy::ExportedItems,
     pub public_items: privacy::PublicItems,
     pub external_paths: ExternalPaths,
-    pub external_traits: RefCell<Option<HashMap<ast::DefId, clean::Trait>>>,
     pub external_typarams: RefCell<Option<HashMap<ast::DefId, String>>>,
     pub inlined: RefCell<Option<HashSet<ast::DefId>>>,
+    pub deref_trait_did: Option<ast::DefId>,
 }
 
 pub type Externs = HashMap<String, Vec<String>>;
@@ -108,21 +110,22 @@ pub fn run_core(search_paths: SearchPaths, cfgs: Vec<String>, externs: Externs,
     };
 
     let codemap = codemap::CodeMap::new();
-    let diagnostic_handler = diagnostic::default_handler(diagnostic::Auto, None);
+    let diagnostic_handler = diagnostic::Handler::new(diagnostic::Auto, None, true);
     let span_diagnostic_handler =
-        diagnostic::mk_span_handler(diagnostic_handler, codemap);
+        diagnostic::SpanHandler::new(diagnostic_handler, codemap);
 
     let sess = session::build_session_(sessopts, cpath,
                                        span_diagnostic_handler);
+    rustc_lint::register_builtins(&mut sess.lint_store.borrow_mut(), Some(&sess));
 
     let cfg = config::build_configuration(&sess);
 
     let krate = driver::phase_1_parse_input(&sess, cfg, &input);
 
-    let name = link::find_crate_name(Some(&sess), krate.attrs.as_slice(),
+    let name = link::find_crate_name(Some(&sess), &krate.attrs,
                                      &input);
 
-    let krate = driver::phase_2_configure_and_expand(&sess, krate, name.as_slice(), None)
+    let krate = driver::phase_2_configure_and_expand(&sess, krate, &name, None)
                     .expect("phase_2_configure_and_expand aborted in rustdoc!");
 
     let mut forest = ast_map::Forest::new(krate);
@@ -146,16 +149,17 @@ pub fn run_core(search_paths: SearchPaths, cfgs: Vec<String>, externs: Externs,
         external_paths: RefCell::new(Some(HashMap::new())),
         inlined: RefCell::new(Some(HashSet::new())),
         populated_crate_impls: RefCell::new(HashSet::new()),
+        deref_trait_did: Cell::new(None),
     };
     debug!("crate: {:?}", ctxt.krate);
 
-    let analysis = CrateAnalysis {
+    let mut analysis = CrateAnalysis {
         exported_items: exported_items,
         public_items: public_items,
         external_paths: RefCell::new(None),
-        external_traits: RefCell::new(None),
         external_typarams: RefCell::new(None),
         inlined: RefCell::new(None),
+        deref_trait_did: None,
     };
 
     let krate = {
@@ -166,11 +170,10 @@ pub fn run_core(search_paths: SearchPaths, cfgs: Vec<String>, externs: Externs,
 
     let external_paths = ctxt.external_paths.borrow_mut().take();
     *analysis.external_paths.borrow_mut() = external_paths;
-    let map = ctxt.external_traits.borrow_mut().take();
-    *analysis.external_traits.borrow_mut() = map;
     let map = ctxt.external_typarams.borrow_mut().take();
     *analysis.external_typarams.borrow_mut() = map;
     let map = ctxt.inlined.borrow_mut().take();
     *analysis.inlined.borrow_mut() = map;
+    analysis.deref_trait_did = ctxt.deref_trait_did.get();
     (krate, analysis)
 }

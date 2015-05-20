@@ -11,6 +11,9 @@
 #![forbid(non_camel_case_types)]
 #![allow(dead_code)]
 
+struct ONE_TWO_THREE;
+//~^ ERROR type `ONE_TWO_THREE` should have a camel case name such as `OneTwoThree`
+
 struct foo { //~ ERROR type `foo` should have a camel case name such as `Foo`
     bar: isize,
 }
@@ -30,6 +33,7 @@ enum Foo5 {
 }
 
 trait foo6 { //~ ERROR trait `foo6` should have a camel case name such as `Foo6`
+    fn dummy(&self) { }
 }
 
 fn f<ty>(_: ty) {} //~ ERROR type parameter `ty` should have a camel case name such as `Ty`

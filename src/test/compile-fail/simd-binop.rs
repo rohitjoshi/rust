@@ -10,7 +10,7 @@
 
 // ignore-tidy-linelength
 
-#![allow(unstable)]
+#![feature(core)]
 
 use std::simd::f32x4;
 

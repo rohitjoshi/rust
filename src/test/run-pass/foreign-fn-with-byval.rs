@@ -8,13 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+
+#[derive(Copy, Clone)]
 pub struct S {
     x: u64,
     y: u64,
     z: u64,
 }
-
-impl Copy for S {}
 
 #[link(name = "rust_test_helpers")]
 extern {

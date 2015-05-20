@@ -12,13 +12,15 @@
 // Issue #3148.
 
 
-fn subslice1<'r>(v: &'r [uint]) -> &'r [uint] { v }
+// pretty-expanded FIXME #23616
 
-fn both<'r>(v: &'r [uint]) -> &'r [uint] {
+fn subslice1<'r>(v: &'r [usize]) -> &'r [usize] { v }
+
+fn both<'r>(v: &'r [usize]) -> &'r [usize] {
     subslice1(subslice1(v))
 }
 
 pub fn main() {
     let v = vec!(1,2,3);
-    both(v.as_slice());
+    both(&v);
 }

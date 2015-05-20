@@ -11,17 +11,17 @@
 // ignore-test
 // error-pattern:index out of bounds
 
-use std::uint;
+use std::usize;
 
 fn main() {
-    let x = vec!(1u,2u,3u);
+    let x = vec!(1_usize,2_usize,3_usize);
 
     // This should cause a bounds-check panic, but may not if we do our
     // bounds checking by comparing a scaled index value to the vector's
     // length (in bytes), because the scaling of the index will cause it to
     // wrap around to a small number.
 
-    let idx = uint::MAX & !(uint::MAX >> 1u);
+    let idx = usize::MAX & !(usize::MAX >> 1_usize);
     println!("ov2 idx = 0x%x", idx);
 
     // This should panic.
